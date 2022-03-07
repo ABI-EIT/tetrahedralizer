@@ -1,5 +1,5 @@
 from combine_lobes import select_faces_using_points, select_shared_points, select_shared_faces, pyvista_faces_to_2d, \
-    pyvista_faces_to_1d, select_points_in_faces, merge_surfaces_removing_shared_faces
+    pyvista_faces_to_1d, select_points_in_faces, remove_shared_faces
 
 import numpy as np
 import pyvista as pv
@@ -108,7 +108,7 @@ def test_select_points_in_faces():
     assert np.array_equal(points_in_test_faces, exclusive_points)
 
 
-def test_merge_surfaces_removing_shared_faces():
+def test_remove_shared_faces():
     a_merged_points = mesh_a_verts[:-2]
     a_merged_faces = pyvista_faces_to_1d(pyvista_faces_to_2d(mesh_a_faces)[:-8])
     a_merged = pv.PolyData(a_merged_points, a_merged_faces)
@@ -120,11 +120,13 @@ def test_merge_surfaces_removing_shared_faces():
     c_merged = pv.PolyData(c_merged_points, c_merged_faces)
     a_b_c_merged = pv.MultiBlock([a_merged, b_merged, c_merged]).combine(merge_points=True, tolerance=1e-05)
 
-    merged = merge_surfaces_removing_shared_faces([mesh_a, mesh_b, mesh_c])
+    merged = remove_shared_faces([mesh_a, mesh_b, mesh_c])
 
     assert np.array_equal(a_b_c_merged.points, merged.points)
     assert np.array_equal(a_b_c_merged.cells, merged.cells)
 
+    p = pv.PolyData(merged.points, merged.cells)
+    assert p.is_manifold
 
 def main():
     p = pv.Plotter()

@@ -1,3 +1,4 @@
+from typing import Tuple, Union
 import pyvista as pv
 import numpy as np
 import os
@@ -6,9 +7,15 @@ import meshio
 import itertools
 from tkinter import Tk
 from tkinter.filedialog import askopenfilenames
+from pyvista import UnstructuredGrid
+from matplotlib import cm
+
 """
-Testing methods to combine surface meshes of lung lobes. The lobes have coinciding walls, which we want to remove,
-then fix the mesh so it is manifold
+App to combine meshes by removing their shared walls. Designed to be used with surface meshes representing the lobes of
+the lung. When tetrahedralizing a torso surface with lungs, this is necessary even though we wish to retain the surfaces
+of the individual lobe. This is because our tetrahedralization approach is a two step process. First, tetrahedralize the
+torso, leaving a hole for the lungs. Second, fill the hole with the lung lobes. In the first step therefore, we need a 
+combined surface of the entire lung.
 """
 
 output_directory = "output"
@@ -16,7 +23,7 @@ output_suffix = "shared_faces_removed"
 
 
 def main():
-
+    # Select files
     Tk().withdraw()
     filenames = askopenfilenames(title="Select meshes to merge")
     if len(filenames) == 0:
@@ -24,14 +31,20 @@ def main():
     Tk().destroy()
     meshes = [pv.PolyData(pv.read(filename)) for filename in filenames]
 
+    # Plot input meshes
+    cmap = cm.get_cmap("Set1")
     p = pv.Plotter()
-    for mesh in meshes:
-        p.add_mesh(mesh, style="wireframe")
+    for i, mesh in enumerate(meshes):
+        p.add_mesh(mesh, style="wireframe", opacity=0.5, color=cmap(i)[:-1], line_width=2)
+    p.camera_position = [0, -1, 0.25]
+    p.camera.focal_point = np.add(p.camera.focal_point, [0, 0, 25])
     p.add_title("Input Meshes")
     p.show()
 
-    combined = merge_surfaces_removing_shared_faces(meshes)
+    # Combine lobes
+    combined, removed_points = remove_shared_faces(meshes, return_removed_points=True)
 
+    # Save result
     output_filename = ""
     for filename in filenames:
         mesh_path = pathlib.Path(filename)
@@ -44,15 +57,30 @@ def main():
     m = meshio.Mesh(combined.points, {"triangle": pyvista_faces_to_2d(combined.cells)})
     m.write(f"{output_directory}/{output_filename}.stl")
 
+    # Plot result
+    shared_faces_meshes = []
+    for mesh, points in zip(meshes, removed_points):
+        shared_faces_indices = select_faces_using_points(mesh, points)
+        shared_faces = pyvista_faces_to_1d(pyvista_faces_to_2d(mesh.faces)[shared_faces_indices])
+        shared_faces_meshes.append(pv.PolyData(mesh.points, faces=shared_faces))
+
     p = pv.Plotter()
     p.add_mesh(combined, style="wireframe")
+    for mesh in shared_faces_meshes:
+        p.add_mesh(mesh, style="wireframe", color="red")
+    p.camera_position = [0, -1, 0.25]
+    p.camera.focal_point = np.add(p.camera.focal_point, [0, 0, 25])
     p.add_title("Shared Faces Removed")
     p.show()
 
 
-def merge_surfaces_removing_shared_faces(meshes: list[pv.PolyData], tolerance: float = None) -> pv.UnstructuredGrid:
+def remove_shared_faces(meshes: list[pv.PolyData], tolerance: float = None,
+                        return_removed_points: bool = False, merge_result=True) -> Union[
+    Union[UnstructuredGrid, list], tuple[Union[UnstructuredGrid, list], list]]:
     """
-    Merge PyVista Polydata surface meshes and remove faces that any two surfaces share.
+    Remove faces shared by any two of a list of Pyvista Polydata and merge the result. This is similar to the Pyvista
+    boolean union, but works with intersections of zero volume. The meshes can optionally be returned unmerged. The
+    removed points can also optionally be returned.
 
     Parameters
     ----------
@@ -60,14 +88,24 @@ def merge_surfaces_removing_shared_faces(meshes: list[pv.PolyData], tolerance: f
         List of meshes to merge
     tolerance
         Tolerance for selecting shared points
+    merge_result
+        If true, returns meshes merged. Otherwise returns as a list. Default True
+    return_removed_points
+        If true, returns a list of points that were removed. (Points are returned not faces since Pyvista rebuilds
+        meshes by removing points not faces. The points that are removed are those that were exclusively used by the
+        shared faces.)
 
     Returns
     -------
-    Unstructured grid representing the combination of the input meshes, with shared walls removed.
+    Unstructured grid representing the combination of the input meshes, with shared walls removed. Alternatively,
+    a copy of the input list of meshes with shared walls removed.
+
+    Optionally, list of points that were removed.
 
     """
     # For each pair:
-    for mesh_a, mesh_b in itertools.combinations(meshes, 2):
+    points_to_remove = [[] for _ in range(len(meshes))]
+    for (index_a, mesh_a), (index_b, mesh_b) in itertools.combinations(enumerate(meshes), 2):
         shared_points_kwargs = {"mesh_a": mesh_a, "mesh_b": mesh_b, "tolerance": tolerance}
         shared_points_a, shared_points_b = select_shared_points(**{k: v for k, v in shared_points_kwargs.items() if v is not None})
 
@@ -77,15 +115,27 @@ def merge_surfaces_removing_shared_faces(meshes: list[pv.PolyData], tolerance: f
         to_delete_mesh_a = select_points_in_faces(mesh_a, shared_points_a, mesh_a_faces, exclusive=True)
         to_delete_mesh_b = select_points_in_faces(mesh_b, shared_points_b, mesh_b_faces, exclusive=True)
 
-        if len(to_delete_mesh_a) > 0:
-            mesh_a.remove_points(to_delete_mesh_a, inplace=True)
-        if len(to_delete_mesh_b) > 0:
-            mesh_b.remove_points(to_delete_mesh_b, inplace=True)
+        points_to_remove[index_a].extend(np.array(to_delete_mesh_a))
+        points_to_remove[index_b].extend(np.array(to_delete_mesh_b))
 
-    blocks = pv.MultiBlock(meshes)
-    combined = blocks.combine(merge_points=True, tolerance=1e-05)
+    trimmed_meshes = []
+    for i, mesh in enumerate(meshes):
+        if len(points_to_remove[i]) > 0:
+            trimmed, _ = mesh.remove_points(np.array(points_to_remove[i]))
+            trimmed_meshes.append(trimmed)
+        else:
+            trimmed_meshes.append(mesh.copy())
 
-    return combined
+    if merge_result:
+        blocks = pv.MultiBlock(trimmed_meshes)
+        output = blocks.combine(merge_points=True, tolerance=1e-05)
+    else:
+        output = trimmed_meshes
+
+    if not return_removed_points:
+        return output
+    else:
+        return output, points_to_remove
 
 
 # Not used any more because we need to use the shared points too.
