@@ -1,23 +1,28 @@
 import pyvista as pv
-import pymeshfix
 import numpy as np
 import os
 import pathlib
 import meshio
-from numpy.typing import ArrayLike
-
+import itertools
+from tkinter import Tk
+from tkinter.filedialog import askopenfilenames
 """
 Testing methods to combine surface meshes of lung lobes. The lobes have coinciding walls, which we want to remove,
 then fix the mesh so it is manifold
 """
 
-filenames = ["meshes/LLL.stl", "meshes/LUL.stl"]
 output_directory = "output"
 output_suffix = "shared_faces_removed"
 
 
 def main():
-    meshes = [pv.read(filename) for filename in filenames]
+
+    Tk().withdraw()
+    filenames = askopenfilenames(title="Select meshes to merge")
+    if len(filenames) == 0:
+        return
+    Tk().destroy()
+    meshes = [pv.PolyData(pv.read(filename)) for filename in filenames]
 
     p = pv.Plotter()
     for mesh in meshes:
@@ -25,60 +30,7 @@ def main():
     p.add_title("Input Meshes")
     p.show()
 
-    # #Show in subplots to prove that each lobe has a copy of the wall
-    # p = pv.Plotter(shape=(1, len(meshes)))
-    # for i, mesh in enumerate(meshes):
-    #     p.subplot(0, i)
-    #     p.add_mesh(mesh, style="wireframe")
-    # p.show()
-
-    # """
-    # Attempting to use the intersecting triangles function of pymeshfix. This is not working and seems to return
-    # random cells. Pyvista boolean operation are not working either and just error.
-    # """
-    # blocks = pv.MultiBlock(meshes)
-    # combined = blocks.combine()
-    # tin = pymeshfix.PyTMesh()
-    # tin.load_array(combined.points, combined.cells.reshape(-1, 4)[:, 1:])
-    # intersecting = tin.select_intersecting_triangles()
-    # cells = combined.cells.reshape(-1, 4)[:, 1:]
-    # cells_updated = np.delete(cells, intersecting, 0)
-    # mesh_updated = pv.PolyData(combined.points, np.insert(cells_updated, 0, values=3, axis=1).ravel())
-
-    """
-    Let's try finding all the faces that use 3 shared nodes.
-
-    This works!
-    """
-    # TODO make it work with three lobes, put algorithm in a library, make the rest an app
-
-    # Find shared nodes
-    tolerance = 1e-05
-    # Do this for each pair I guess. Right now this only works if there are only two meshes
-
-
-    # # Plot shared points. Should appear as overlapping pairs, so with opacity 0.5 the combined color should indicate
-    # # the correct presence of 2 overlapping points.
-    # p = pv.Plotter()
-    # p_a = pv.PolyData(meshes[0].points[np.asarray(shared_points)[:, 0]])
-    # p_b = pv.PolyData(meshes[1].points[np.asarray(shared_points)[:, 1]])
-    # p.add_points(p_a, color="red", point_size=10, opacity=0.5)
-    # p.add_points(p_b, color="blue", point_size=10, opacity=0.5)
-    # p.show()
-
-    # Find elements where all nodes are in the shared nodes list
-
-
-    # # Plot shared faces
-    # p = pv.Plotter()
-    # for i, mesh in enumerate(meshes):
-    #     faces = mesh.faces.reshape(-1, 4)[:, 1:]
-    #     faces_trimmed = faces[shared_faces[i]]
-    #     shared_face_mesh = pv.PolyData(mesh.points, np.insert(faces_trimmed, 0, values=3, axis=1).ravel())
-    #     p.add_mesh(shared_face_mesh, style="wireframe")
-    # p.add_title("Shared Faces")
-    # p.show()
-
+    combined = merge_surfaces_removing_shared_faces(meshes)
 
     output_filename = ""
     for filename in filenames:
@@ -89,61 +41,72 @@ def main():
     if not os.path.exists(output_directory):
         os.mkdir(output_directory)
 
-    m = meshio.Mesh(new_mesh.points, {"triangle": new_mesh.faces.reshape(-1, 4)[:, 1:]})
+    m = meshio.Mesh(combined.points, {"triangle": pyvista_faces_to_2d(combined.cells)})
     m.write(f"{output_directory}/{output_filename}.stl")
 
     p = pv.Plotter()
-    p.add_mesh(new_mesh, style="wireframe")
-    if holes.number_of_points != 0:
-        p.add_mesh(holes, color="r")
-    p.add_title("Shared Faces Removed and Mesh Fixed")
+    p.add_mesh(combined, style="wireframe")
+    p.add_title("Shared Faces Removed")
     p.show()
 
 
-def merge_surfaces_removing_shared_faces(meshes: list[pv.PolyData], tolerance: float = None) -> pv.PolyData:
+def merge_surfaces_removing_shared_faces(meshes: list[pv.PolyData], tolerance: float = None) -> pv.UnstructuredGrid:
     """
     Merge PyVista Polydata surface meshes and remove faces that any two surfaces share.
 
     Parameters
     ----------
     meshes
+        List of meshes to merge
     tolerance
+        Tolerance for selecting shared points
 
     Returns
     -------
+    Unstructured grid representing the combination of the input meshes, with shared walls removed.
 
     """
     # For each pair:
-    select_shared_faces(mesh_a, meshes, tolerance)
-    # Delete shared faces
-    shared_faces_removed = []
-    for i, mesh in enumerate(meshes):
-        faces = mesh.faces.reshape(-1, 4)[:, 1:]
-        faces_trimmed = np.delete(faces, shared_faces[i], 0)
-        shared_face_removed_mesh = pv.PolyData(mesh.points, np.insert(faces_trimmed, 0, values=3, axis=1).ravel())
-        shared_faces_removed.append(shared_face_removed_mesh)
+    for mesh_a, mesh_b in itertools.combinations(meshes, 2):
+        shared_points_kwargs = {"mesh_a": mesh_a, "mesh_b": mesh_b, "tolerance": tolerance}
+        shared_points_a, shared_points_b = select_shared_points(**{k: v for k, v in shared_points_kwargs.items() if v is not None})
 
-    # Combine meshes and use meshfix.repair
-    blocks = pv.MultiBlock(shared_faces_removed)
+        mesh_a_faces = select_faces_using_points(mesh_a, shared_points_a)
+        mesh_b_faces = select_faces_using_points(mesh_b, shared_points_b)
+
+        to_delete_mesh_a = select_points_in_faces(mesh_a, shared_points_a, mesh_a_faces, exclusive=True)
+        to_delete_mesh_b = select_points_in_faces(mesh_b, shared_points_b, mesh_b_faces, exclusive=True)
+
+        if len(to_delete_mesh_a) > 0:
+            mesh_a.remove_points(to_delete_mesh_a, inplace=True)
+        if len(to_delete_mesh_b) > 0:
+            mesh_b.remove_points(to_delete_mesh_b, inplace=True)
+
+    blocks = pv.MultiBlock(meshes)
     combined = blocks.combine(merge_points=True, tolerance=1e-05)
-    # p = pv.Plotter()
-    # p.add_mesh(combined, style="wireframe")
-    # p.add_title("Shared Faces Removed")
-    # p.show()
-    meshfix = pymeshfix.MeshFix(combined.points, combined.cells.reshape(-1, 4)[:, 1:])
-    holes = meshfix.extract_holes()
-    meshfix.repair()
 
-    # Todo: This loses all face data! how can we do this better
-    new_mesh = pv.PolyData(meshfix.v, np.insert(meshfix.f, 0, values=3, axis=1).ravel())
-
-    # Delete faces
-    # Check which points are still used, delete the rest, (Could use pv.clean but that could delete other orphaned
-    # points which we don't necessarily want to do.
-    return new_mesh
+    return combined
 
 
-def select_shared_faces(mesh_a: pv.PolyData, mesh_b: pv.PolyData, tolerance: float = None) -> tuple:
+# Not used any more because we need to use the shared points too.
+def select_shared_faces(mesh_a: pv.PolyData, mesh_b: pv.PolyData, tolerance: float = None) -> tuple[list, list]:
+    """
+    Select that faces that two meshes share. Shared faces are determined by selecting the faces that use shared points.
+
+    Parameters
+    ----------
+    mesh_a
+        First mesh
+    mesh_b
+        Second mesh
+    tolerance
+        Tolerance for selecting shared points
+
+    Returns
+    -------
+    Tuple of lists containing the indices of the shared faces in mesh_a and mesh_b
+
+    """
     shared_points_kwargs = {"mesh_a": mesh_a, "mesh_b": mesh_b, "tolerance": tolerance}
     shared_points = select_shared_points(**{k: v for k, v in shared_points_kwargs.items() if v is not None})
 
@@ -153,27 +116,148 @@ def select_shared_faces(mesh_a: pv.PolyData, mesh_b: pv.PolyData, tolerance: flo
     return mesh_a_faces, mesh_b_faces
 
 
+def select_points_in_faces(mesh: pv.PolyData, points: list[int] = None, faces: list[int] = None,
+                           exclusive: bool = False) -> list[int]:
+    """
+    Select points used in the faces of a mesh. Optionally specify a subset of points and/or faces to check. When
+    exclusive is set to True, selects only points that are not used in the remaining faces.
+
+    Only works on meshes with all the same number of points per face.
+
+    Parameters
+    ----------
+    mesh
+        Mesh to select from
+    points
+        Optional subset of points in mesh to select from
+    faces
+        Optional subset of faces in mesh to test
+    exclusive
+        If true, selects only points exclusively used in the specified faces
+
+    Returns
+    -------
+    List of points used in the specified faces
+
+    """
+    mesh_faces_2d = pyvista_faces_to_2d(mesh.faces)
+    faces_2d = mesh_faces_2d[faces]
+    remaining_faces = np.delete(mesh_faces_2d, faces, 0)
+
+    # Check if any given point exists in the faces to search
+    used_in_faces = []
+    for point in points:
+        if any(point in face for face in faces_2d):
+            used_in_faces.append(point)
+
+    # If exclusive is set, remove points that also exist in the remaining faces
+    excluded_points = []
+    if exclusive:
+        for point in used_in_faces:
+            if any(point in face for face in remaining_faces):
+                excluded_points.append(point)
+
+    used_in_faces = list(set(used_in_faces) - set(excluded_points))
+
+    return used_in_faces
+
+
+def pyvista_faces_to_2d(faces: np.ndarray) -> np.ndarray:
+    """
+    Convert pyvista faces from the native 1d array to a 2d array with one face per row. Padding is trimmed.
+
+    Only works on a list of faces with all the same number of points per face.
+
+    Parameters
+    ----------
+    faces
+        Faces to be reshaped
+
+    Returns
+    -------
+    2d array of faces
+    """
+    points_per_face = faces[0]
+    return faces.reshape(-1, points_per_face+1)[:, 1:]
+
+
+def pyvista_faces_to_1d(faces: np.ndarray) -> np.ndarray:
+    """
+    Convert 2d array of faces to the pyvista native 1d format, inserting the padding.
+
+    Only works on a list of faces with all the same number of points per face.
+
+    Parameters
+    ----------
+    faces
+        Faces to be reshaped
+
+    Returns
+    -------
+    1d array of faces
+
+    """
+    padding = len(faces[0])
+    return np.insert(faces, 0, values=padding, axis=1).ravel()
+
+
 def select_shared_points(mesh_a: pv.PolyData, mesh_b: pv.PolyData, tolerance: float = 1e-05) \
-        -> tuple[list[ArrayLike],list[ArrayLike]]:
-    shared_points = ([],[])
+        -> tuple[list[int], list[int]]:
+    """
+    Select the points that two meshes share. Points are considered shared if they are within a specified euclidian
+    distance from one another.
+
+    Parameters
+    ----------
+    mesh_a
+        First mesh
+    mesh_b
+        Second mesh
+    tolerance
+        Maximum euclidian distance between points to consider them shared
+
+    Returns
+    -------
+    shared_points
+        Tuple containing indices of shared points in mesh_a, and shared points in mesh_b
+
+    """
+    shared_points_a = []
+    shared_points_b = []
     for i_a, point_a in enumerate(mesh_a.points):
         for i_b, point_b in enumerate(mesh_b.points):
             # linalg.norm calculates euclidean distance
             if np.linalg.norm(point_a - point_b) <= tolerance:
                 # Need to remember the index of the shared point in both meshes so we can find faces that use it in both
-                shared_points[0].append(i_a)
-                shared_points[1].append(i_b)
+                shared_points_a.append(i_a)
+                shared_points_b.append(i_b)
 
-    return shared_points
+    return shared_points_a, shared_points_b
 
 
-def select_faces_using_points(mesh, points: list[tuple[ArrayLike, ArrayLike]]) -> list:
+def select_faces_using_points(mesh: pv.PolyData, points: list) -> list[int]:
+    """
+    Select all faces in a mesh that contain only the specified points.
+
+    Parameters
+    ----------
+    mesh:
+        Mesh to select from
+    points
+        The only points in the given mesh that the selected faces may contain
+
+    Returns
+    -------
+    mesh_faces
+        List of indices of the selected faces in the mesh
+
+    """
     mesh_faces = []
     faces = mesh.faces.reshape(-1, 4)[:, 1:]
-    mesh_shared_points_set = set(np.asarray(points)[:, i])
+    points_set = set(points)
     for j, face in enumerate(faces):
-        # Check if all of face are in the current meshes shared points
-        if set(face).issubset(mesh_shared_points_set):
+        # Check if all of the points in each face are in the target points set
+        if set(face).issubset(points_set):
             mesh_faces.append(j)
 
     return mesh_faces
