@@ -1,5 +1,5 @@
 from combine_lobes import select_faces_using_points, select_shared_points, select_shared_faces, pyvista_faces_to_2d, \
-    pyvista_faces_to_1d, select_points_in_faces, remove_shared_faces
+    pyvista_faces_to_1d, select_points_in_faces, remove_shared_faces, pyvista_faces_by_dimension
 
 import numpy as np
 import pyvista as pv
@@ -127,6 +127,27 @@ def test_remove_shared_faces():
 
     p = pv.PolyData(merged.points, merged.cells)
     assert p.is_manifold
+
+
+def test_pyvista_faces_by_dimension():
+    # mesh points
+    vertices = np.array([[0, 0, 0],
+                         [1, 0, 0],
+                         [1, 1, 0],
+                         [0, 1, 0],
+                         [0.5, 0.5, -1]])
+
+    # mesh faces
+    faces = np.hstack([[4, 0, 1, 2, 3],  # square
+                       [3, 0, 1, 4],  # triangle
+                       [3, 1, 2, 4]])  # triangle
+
+    mesh = pv.PolyData(vertices, faces)
+
+    faces_by_dim = pyvista_faces_by_dimension(mesh.faces)
+    assert np.array_equal(faces_by_dim[3], np.array([3, 0, 1, 4, 3, 1, 2, 4]))
+    assert np.array_equal(faces_by_dim[4], np.array([4, 0, 1, 2, 3]))
+
 
 def main():
     p = pv.Plotter()

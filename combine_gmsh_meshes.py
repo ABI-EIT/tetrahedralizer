@@ -6,6 +6,7 @@ import os
 import meshio
 import numpy as np
 from matplotlib import cm
+from combine_lobes.combine_lobes import pyvista_faces_to_2d, pyvista_faces_by_dimension
 
 """
 App combine gmsh .msh files
@@ -45,7 +46,25 @@ def main():
     p.add_title("Combined Tetrahedralized Lung Sections")
     p.show()
 
-    #  TODO output to ply
+    # Save result
+    output_filename = ""
+    for filename in filenames:
+        mesh_path = pathlib.Path(filename)
+        output_filename += f"{mesh_path.stem}_"
+    output_filename += output_suffix
+
+    if not os.path.exists(output_directory):
+        os.mkdir(output_directory)
+
+    faces_by_dim = pyvista_faces_by_dimension(combined.cells)
+    meshio_faces = {
+        "triangle": pyvista_faces_to_2d(faces_by_dim[3]) if 3 in faces_by_dim else [],
+        "quad": pyvista_faces_to_2d(faces_by_dim[4]) if 4 in faces_by_dim else []
+    }
+
+    # Todo add color!
+    m = meshio.Mesh(combined.points, meshio_faces)
+    m.write(f"{output_directory}/{output_filename}.ply")
 
 
 if __name__ == "__main__":

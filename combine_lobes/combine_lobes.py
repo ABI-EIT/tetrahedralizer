@@ -212,6 +212,22 @@ def select_points_in_faces(mesh: pv.PolyData, points: list[int] = None, faces: l
     return used_in_faces
 
 
+def pyvista_faces_by_dimension(faces: np.ndarray) -> dict[int: np.ndarray]:
+    output = {}
+    i = 0
+    while i < len(faces):
+        # Preceding each face is the "padding" indicating the number of elements in the face
+        num_elems = faces[i]
+        # Append padding plus each element to the output dict
+        if num_elems in output:
+            output[num_elems] = np.append(output[num_elems], np.array([faces[i+j] for j in range(num_elems+1)]))
+        else:
+            output[num_elems] = np.array([faces[i+j] for j in range(num_elems+1)])
+        # Increment index to the next padding number
+        i += num_elems + 1
+    return output
+
+
 def pyvista_faces_to_2d(faces: np.ndarray) -> np.ndarray:
     """
     Convert pyvista faces from the native 1d array to a 2d array with one face per row. Padding is trimmed.

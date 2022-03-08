@@ -6,6 +6,7 @@ import pathlib
 import os
 import meshio
 import numpy as np
+from matplotlib import cm
 
 """
 App to view a mesh using the pyvista plane widget
@@ -33,7 +34,13 @@ def main():
     # p.add_mesh(mesh, color="white", opacity=0.5, show_edges=False, edge_color="gray")
     # p.add_plane_widget(plane_func, assign_to_axis="z")
 
-    p.add_mesh_clip_plane(mesh, invert=True, assign_to_axis="z", show_edges=True, opacity=0.5)
+    p.add_mesh(mesh, opacity=0.15, show_edges=True, edge_color="gray")
+
+    def plane_func(normal, origin):
+        slc = mesh.slice(normal=normal, origin=origin)
+        p.add_mesh(slc, name="slice", show_edges=True)
+
+    p.add_plane_widget(plane_func, assign_to_axis="z")
 
     p.show()
 
