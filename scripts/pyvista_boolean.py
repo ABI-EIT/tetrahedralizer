@@ -6,7 +6,7 @@ import meshio
 from tkinter import Tk
 from tkinter.filedialog import askopenfilenames
 from matplotlib import cm
-from combine_lobes.combine_lobes import pyvista_faces_to_1d, pyvista_faces_to_2d
+from pyvista_tools.pyvista_tools import pyvista_faces_to_2d, pyvista_faces_to_1d
 import pymeshfix
 
 output_directory = "output"

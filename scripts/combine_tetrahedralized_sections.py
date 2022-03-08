@@ -6,7 +6,7 @@ import os
 import meshio
 import numpy as np
 from matplotlib import cm
-from combine_lobes.combine_lobes import pyvista_faces_to_2d, pyvista_faces_by_dimension
+from pyvista_tools.pyvista_tools import pyvista_faces_by_dimension, pyvista_faces_to_2d
 
 """
 App combine gmsh .msh files
