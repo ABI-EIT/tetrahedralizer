@@ -27,25 +27,23 @@ def main():
     p = pv.Plotter()
     for i, mesh in enumerate(meshes):
         p.add_mesh(mesh, style="wireframe", opacity=0.5, color=cmap(i)[:-1], line_width=2)
-    p.camera_position = [0, -1, 0.25]
-    p.camera.focal_point = np.add(p.camera.focal_point, [0, 0, 25])
+    # p.camera_position = [0, -1, 0.25]
+    # p.camera.focal_point = np.add(p.camera.focal_point, [0, 0, 25])
     p.add_title("Input Meshes")
     p.show()
 
+    # # Union meshes
+    # for mesh in meshes:
+    #     mesh = mesh.clean()
+    #     meshfix = pymeshfix.MeshFix(mesh.points, pyvista_faces_to_2d(mesh.faces))
+    #     meshfix.repair()
+    #     mesh.points = meshfix.v
+    #     mesh.faces = pyvista_faces_to_1d(meshfix.f)
 
+    booleaned = meshes[0].boolean_union(meshes[1])
 
-    # Union meshes
-    for mesh in meshes:
-        mesh = mesh.clean()
-        meshfix = pymeshfix.MeshFix(mesh.points, pyvista_faces_to_2d(mesh.faces))
-        meshfix.repair()
-        mesh.points = meshfix.v
-        mesh.faces = pyvista_faces_to_1d(meshfix.f)
-
-    booleaned = meshes[0].boolean_difference(meshes[1])
-
-    meshes[0].plot_normals(mag=20)
-    meshes[1].plot_normals(mag=20)
+    # meshes[0].plot_normals(mag=20)
+    # meshes[1].plot_normals(mag=20)
 
     booleaned.plot()
 
