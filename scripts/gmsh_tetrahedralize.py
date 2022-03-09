@@ -28,11 +28,6 @@ def main():
     s = gmsh.model.get_entities(2)
     l = gmsh.model.geo.addSurfaceLoop([e[1] for e in s])
     gmsh.model.geo.addVolume([l])
-    #
-    # for a, b in itertools.combinations(gmsh.model.get_entities(2), 2):
-    #     fragment = gmsh.model.occ.fragment(a, b)
-
-    # elements = gmsh.model.mesh.get_elements(2)
 
     gmsh.model.geo.synchronize()
 

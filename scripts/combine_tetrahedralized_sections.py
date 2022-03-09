@@ -16,6 +16,9 @@ output_directory = "output"
 output_suffix = "combined"
 plot_result = True
 
+# filename_max_length = 255
+filename_max_length = 200
+backup_filename = "tetrahedralized_mesh"
 
 def main():
     Tk().withdraw()
@@ -64,7 +67,24 @@ def main():
 
     # Todo add color!
     m = meshio.Mesh(combined.points, meshio_faces)
-    m.write(f"{output_directory}/{output_filename}.ply")
+
+    filename = f"{output_directory}/{output_filename}.ply"
+    if len(filename) > filename_max_length:
+        filename = create_unique_file_name(base=backup_filename, extension=".ply")
+
+    m.write(f"{output_directory}/{filename}")
+
+
+def create_unique_file_name(directory=".", base="", extension=""):
+
+    addition = ""
+    i = 0
+    while True:
+        try_name = directory + "/" + base + addition + extension
+        if not (os.path.exists(try_name)):
+            return try_name
+        i += 1
+        addition = "_" + str(i)
 
 
 if __name__ == "__main__":
