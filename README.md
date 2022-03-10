@@ -1,2 +1,2 @@
-# lungsim_to_EIT
-Libraries and Apps for converting ABI Lungsim models to EIT models
+# tetrahedralizer
+Libraries and Apps for converting surface meshes to volumetric meshes for use in finite element analysis
