@@ -1,0 +1,7 @@
+{
+  "gmsh_options": {
+    "Mesh.MeshSizeMax": 10
+  },
+  "output_suffix": "gmshed",
+  "output_directory": "output"
+}

@@ -1,15 +1,14 @@
 import itertools
-
 import numpy as np
 import os
 import pathlib
 from tkinter import Tk
 from tkinter.filedialog import askopenfilenames
 import gmsh
+import json
+import pyvista as pv
 
-output_directory = "output"
-output_suffix = "gmshed"
-
+config_filename = "conf.json"
 
 def main():
     # Select files
@@ -18,6 +17,12 @@ def main():
     if len(filenames) == 0:
         return
     Tk().destroy()
+
+    with open(config_filename, "r") as f:
+        config = json.load(f)
+
+    output_directory = config["output_directory"]
+    output_suffix = config["output_suffix"]
 
     gmsh.initialize()
 
@@ -30,6 +35,9 @@ def main():
     gmsh.model.geo.addVolume([l])
 
     gmsh.model.geo.synchronize()
+
+    for name, value in config["gmsh_options"].items():
+        gmsh.option.set_number(name, value)
 
     gmsh.model.mesh.generate(3)
 
@@ -45,7 +53,24 @@ def main():
 
     gmsh.write(f"{output_directory}/{output_filename}.msh")
 
+
+
+    # # Plot result
+    # p = pv.Plotter()
+    #
+    # p.add_mesh(combined, opacity=0.15, show_edges=True, edge_color="gray")
+    #
+    # def plane_func(normal, origin):
+    #     slc = combined.slice(normal=normal, origin=origin)
+    #     p.add_mesh(slc, name="slice", show_edges=True)
+    #
+    # p.add_plane_widget(plane_func, assign_to_axis="z")
+    #
+    # p.add_title("Combined Tetrahedralized Lung Sections")
+    # p.show()
+
     gmsh.finalize()
+
 
 
 if __name__ == "__main__":
