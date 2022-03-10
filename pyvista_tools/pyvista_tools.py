@@ -1,14 +1,15 @@
 import itertools
-from typing import Union
+from typing import Union, List, Dict, Tuple
 
 import numpy as np
+from numpy.typing import NDArray
 import pyvista as pv
 from pyvista import UnstructuredGrid
 
 
-def remove_shared_faces(meshes: list[pv.PolyData], tolerance: float = None,
+def remove_shared_faces(meshes: List[pv.PolyData], tolerance: float = None,
                         return_removed_points: bool = False, merge_result=True) -> Union[
-    Union[UnstructuredGrid, list], tuple[Union[UnstructuredGrid, list], list]]:
+    Union[UnstructuredGrid, list], Tuple[Union[UnstructuredGrid, list], list]]:
     """
     Remove faces shared by any two of a list of Pyvista Polydata and merge the result. This is similar to the Pyvista
     boolean union, but works with intersections of zero volume. The meshes can optionally be returned unmerged. The
@@ -70,7 +71,7 @@ def remove_shared_faces(meshes: list[pv.PolyData], tolerance: float = None,
         return output, points_to_remove
 
 
-def select_shared_faces(mesh_a: pv.PolyData, mesh_b: pv.PolyData, tolerance: float = None) -> tuple[list, list]:
+def select_shared_faces(mesh_a: pv.PolyData, mesh_b: pv.PolyData, tolerance: float = None) -> Tuple[list, list]:
     """
     Select that faces that two meshes share. Shared faces are determined by selecting the faces that use shared points.
 
@@ -97,8 +98,8 @@ def select_shared_faces(mesh_a: pv.PolyData, mesh_b: pv.PolyData, tolerance: flo
     return mesh_a_faces, mesh_b_faces
 
 
-def select_points_in_faces(mesh: pv.PolyData, points: list[int] = None, faces: list[int] = None,
-                           exclusive: bool = False) -> list[int]:
+def select_points_in_faces(mesh: pv.PolyData, points: List[int] = None, faces: List[int] = None,
+                           exclusive: bool = False) -> List[int]:
     """
     Select points used in the faces of a mesh. Optionally specify a subset of points and/or faces to check. When
     exclusive is set to True, selects only points that are not used in the remaining faces.
@@ -143,7 +144,7 @@ def select_points_in_faces(mesh: pv.PolyData, points: list[int] = None, faces: l
     return used_in_faces
 
 
-def pyvista_faces_by_dimension(faces: np.ndarray) -> dict[int: np.ndarray]:
+def pyvista_faces_by_dimension(faces: NDArray) -> Dict[int, NDArray]:
     output = {}
     i = 0
     while i < len(faces):
@@ -159,7 +160,7 @@ def pyvista_faces_by_dimension(faces: np.ndarray) -> dict[int: np.ndarray]:
     return output
 
 
-def pyvista_faces_to_2d(faces: np.ndarray) -> np.ndarray:
+def pyvista_faces_to_2d(faces: NDArray) -> NDArray:
     """
     Convert pyvista faces from the native 1d array to a 2d array with one face per row. Padding is trimmed.
 
@@ -178,7 +179,7 @@ def pyvista_faces_to_2d(faces: np.ndarray) -> np.ndarray:
     return faces.reshape(-1, points_per_face+1)[:, 1:]
 
 
-def pyvista_faces_to_1d(faces: np.ndarray) -> np.ndarray:
+def pyvista_faces_to_1d(faces: NDArray) -> NDArray:
     """
     Convert 2d array of faces to the pyvista native 1d format, inserting the padding.
 
@@ -199,7 +200,7 @@ def pyvista_faces_to_1d(faces: np.ndarray) -> np.ndarray:
 
 
 def select_shared_points(mesh_a: pv.PolyData, mesh_b: pv.PolyData, tolerance: float = 1e-05) \
-        -> tuple[list[int], list[int]]:
+        -> Tuple[List[int], List[int]]:
     """
     Select the points that two meshes share. Points are considered shared if they are within a specified euclidian
     distance from one another.
@@ -232,7 +233,7 @@ def select_shared_points(mesh_a: pv.PolyData, mesh_b: pv.PolyData, tolerance: fl
     return shared_points_a, shared_points_b
 
 
-def select_faces_using_points(mesh: pv.PolyData, points: list) -> list[int]:
+def select_faces_using_points(mesh: pv.PolyData, points: list) -> List[int]:
     """
     Select all faces in a mesh that contain only the specified points.
 
