@@ -136,3 +136,5 @@ output/
 
 # PyVista log files
 *_skipped*
+
+*conf.json
