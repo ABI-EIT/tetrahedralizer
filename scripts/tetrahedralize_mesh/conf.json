@@ -1,7 +1,0 @@
-{
-  "tetrahedralize_switches": "Ya100",
-  "plot_result": true,
-  "clip_axis": "z",
-  "output_suffix": "tetrahedralized",
-  "output_directory": "output"
-}

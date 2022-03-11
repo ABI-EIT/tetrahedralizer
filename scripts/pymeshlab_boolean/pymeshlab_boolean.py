@@ -8,18 +8,26 @@ from tkinter import Tk
 from tkinter.filedialog import askopenfilename
 from pyvista_tools.pyvista_tools import pyvista_faces_to_1d, pyvista_faces_to_2d
 import json
+from typing import Tuple, List
 
-config_filename = "conf.json"
-
-
-op_map = {
+pymeshlab_op_map = {
+    "Difference": pymeshlab.MeshSet.generate_boolean_difference.__name__,
     "Intersection": pymeshlab.MeshSet.generate_boolean_intersection.__name__,
     "Union": pymeshlab.MeshSet.generate_boolean_union.__name__,
-    "Difference": pymeshlab.MeshSet.generate_boolean_difference.__name__
+    "Xor": pymeshlab.MeshSet.generate_boolean_xor.__name__
 }
 
 
 def main():
+    # Load Config
+    config_filename = "conf.json"
+    with open(config_filename, "r") as f:
+        config = json.load(f)
+
+    output_directory = config["output_directory"]
+    operation = config["operation"]
+    output_suffix = operation
+
     # Select files
     Tk().withdraw()
     filename_a = askopenfilename(title="Select mesh one")
@@ -33,27 +41,13 @@ def main():
         return
     Tk().destroy()
 
-    with open(config_filename, "r") as f:
-        config = json.load(f)
+    # Load files
+    meshes = [pv.read(filename) for filename in [filename_a, filename_b]]
+    mesh_arrays = [(mesh.points, pyvista_faces_to_2d(mesh.faces)) for mesh in meshes]
 
-    output_directory = config["output_directory"]
-    operation = config["operation"]
-    output_suffix = operation
-
-    ms = pymeshlab.MeshSet()
-
-    for filename in [filename_a, filename_b]:
-        ms.load_new_mesh(filename)
-
-    func = getattr(ms, op_map[operation])
-    func(first_mesh=0, second_mesh=1)
-
-    meshes = [ms.mesh(i) for i in range(ms.number_meshes())]
-    original_meshes = [pv.PolyData(mesh.vertex_matrix(), pyvista_faces_to_1d(mesh.face_matrix())) for mesh in meshes[0:2]]
-    blocks = pv.MultiBlock(original_meshes)
-    combined = blocks.combine()
-
-    pv_mesh = pv.PolyData(ms.mesh(2).vertex_matrix(), pyvista_faces_to_1d(ms.mesh(2).face_matrix()))
+    # Run boolean operation
+    booleaned_mesh = pymeshlab_boolean((mesh_arrays[0], mesh_arrays[1]), operation)
+    pv_booleaned_mesh = pv.PolyData(booleaned_mesh[0], pyvista_faces_to_1d(booleaned_mesh[1]))
 
     # Save result
     output_filename = ""
@@ -65,20 +59,53 @@ def main():
     if not os.path.exists(output_directory):
         os.mkdir(output_directory)
 
-    m = meshio.Mesh(pv_mesh.points, {"triangle": pyvista_faces_to_2d(pv_mesh.faces)})
+    m = meshio.Mesh(pv_booleaned_mesh.points, {"triangle": pyvista_faces_to_2d(pv_booleaned_mesh.faces)})
     m.write(f"{output_directory}/{output_filename}.stl")
 
     # Plot results
+    blocks = pv.MultiBlock(meshes)
+    combined = blocks.combine()
     p = pv.Plotter()
-    # Show input meshes in white
     p.add_mesh(combined, label="Input", style="wireframe")
-
-    # Show resulting mesh in red
-    p.add_mesh(pv_mesh, color="red", style="wireframe", label="Result")
-
+    p.add_mesh(pv_booleaned_mesh, color="red", style="wireframe", label="Result")
     p.add_title(f"Input Meshes with {operation} Result")
     p.add_legend(loc="lower right")
     p.show()
+
+
+def pymeshlab_boolean(meshes: Tuple[Tuple[np.ndarray, np.ndarray], Tuple[np.ndarray, np.ndarray]], operation: str) \
+        -> Tuple[np.ndarray, np.ndarray]:
+    """
+    Run a pymesh boolean operation on two input meshes. The meshes are described as a platform agnostic Tuple of ndarrays
+    representing mesh vertices and faces. The format is as follows:
+        Tuple element 0: 3xN ndarray of float representing XYZ points in 3D space
+        Tuple element 1: 3xN ndarray of int representing triangular faces composed of indices the points
+
+    Parameters
+    ----------
+    meshes
+        Tuple of two input meshes in array format
+    operation
+        Pymeshlab boolean operation name. String names are mapped to pymeshlab functions in ppymeshlab_op_map
+
+    Returns
+    -------
+    booleaned_mesh
+        Result of the boolean operation in array format
+
+
+    """
+    ms = pymeshlab.MeshSet()
+    for mesh in meshes:
+        ml_mesh = pymeshlab.Mesh(mesh[0], mesh[1])
+        ms.add_mesh(ml_mesh)
+
+    func = getattr(ms, pymeshlab_op_map[operation])
+    func(first_mesh=0, second_mesh=1)
+
+    booleaned_mesh = (ms.mesh(2).vertex_matrix(), ms.mesh(2).face_matrix())
+    
+    return booleaned_mesh
 
 
 if __name__ == "__main__":
