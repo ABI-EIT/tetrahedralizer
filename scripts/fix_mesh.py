@@ -36,7 +36,7 @@ def main():
     if not os.path.exists(output_directory):
         os.mkdir(output_directory)
 
-    m = meshio.Mesh(mesh.points, {"triangle": pyvista_faces_to_2d(mesh.faces)})
+    m = meshio.Mesh(fixed_mesh.points, {"triangle": pyvista_faces_to_2d(fixed_mesh.faces)})
     m.write(f"{output_directory}/{path.stem}_{output_suffix}.stl")
 
     # Plot

@@ -34,7 +34,7 @@ def main():
 
     blocks = pv.MultiBlock(meshes)
     combined = blocks.combine()
-
+    combined.celltypes[np.where(combined.celltypes == vtkmodules.util.vtkConstants.VTK_QUAD)] = vtkmodules.util.vtkConstants.VTK_TETRA
     # Save result
     output_filename = ""
     for filename in filenames:

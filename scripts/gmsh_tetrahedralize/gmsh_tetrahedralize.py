@@ -28,10 +28,29 @@ def main():
         return
     Tk().destroy()
 
-    meshes = [pv.read(filename) for filename in filenames]
-    mesh_arrays = [(mesh.points, pyvista_faces_to_2d(mesh.faces)) for mesh in meshes]
+    # meshes = [pv.read(filename) for filename in filenames]
+    # mesh_arrays = [(mesh.points, pyvista_faces_to_2d(mesh.faces)) for mesh in meshes]
+    #
+    # nodes, elements = gmsh_tetrahedralize(mesh_arrays, gmsh_options)
 
-    nodes, elements = gmsh_tetrahedralize(mesh_arrays, gmsh_options)
+    gmsh.initialize()
+    for filename in filenames:
+        gmsh.merge(filename)
+
+    # Create a volume from all the surfaces
+    s = gmsh.model.get_entities(2)
+    l = gmsh.model.geo.addSurfaceLoop([e[1] for e in s])
+    gmsh.model.geo.addVolume([l])
+
+    gmsh.model.geo.synchronize()
+
+    for name, value in gmsh_options.items():
+        gmsh.option.set_number(name, value)
+
+    gmsh.model.mesh.generate(3)
+
+    nodes, elements = gmsh_tetrahedral_mesh_to_arrays()
+
     gmsh.finalize()
 
     mesh = pyvista_tetrahedral_mesh_from_arrays(nodes, elements[0], elements[1])
