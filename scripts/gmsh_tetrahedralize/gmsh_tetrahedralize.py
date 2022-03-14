@@ -10,6 +10,7 @@ from typing import List, Tuple
 import vtkmodules
 from pyvista_tools import pyvista_faces_to_2d, pyvista_tetrahedral_mesh_from_arrays, pyvista_faces_by_dimension
 import meshio
+import tempfile
 
 
 def main():
@@ -28,29 +29,10 @@ def main():
         return
     Tk().destroy()
 
-    # meshes = [pv.read(filename) for filename in filenames]
-    # mesh_arrays = [(mesh.points, pyvista_faces_to_2d(mesh.faces)) for mesh in meshes]
-    #
-    # nodes, elements = gmsh_tetrahedralize(mesh_arrays, gmsh_options)
-
+    meshes = [pv.read(filename) for filename in filenames]
+    mesh_arrays = [(mesh.points, pyvista_faces_to_2d(mesh.faces)) for mesh in meshes]
     gmsh.initialize()
-    for filename in filenames:
-        gmsh.merge(filename)
-
-    # Create a volume from all the surfaces
-    s = gmsh.model.get_entities(2)
-    l = gmsh.model.geo.addSurfaceLoop([e[1] for e in s])
-    gmsh.model.geo.addVolume([l])
-
-    gmsh.model.geo.synchronize()
-
-    for name, value in gmsh_options.items():
-        gmsh.option.set_number(name, value)
-
-    gmsh.model.mesh.generate(3)
-
-    nodes, elements = gmsh_tetrahedral_mesh_to_arrays()
-
+    nodes, elements = gmsh_tetrahedralize(mesh_arrays, gmsh_options)
     gmsh.finalize()
 
     mesh = pyvista_tetrahedral_mesh_from_arrays(nodes, elements[0], elements[1])
@@ -87,7 +69,6 @@ def main():
 def gmsh_tetrahedralize(meshes: List[Tuple[np.ndarray, np.ndarray]], gmsh_options: dict) \
         -> Tuple[np.ndarray, Tuple[np.ndarray, np.ndarray]]:
 
-    gmsh.initialize()
     for mesh in meshes:
         gmsh_load_from_arrays(mesh[0], mesh[1])
 
@@ -123,9 +104,7 @@ def gmsh_load_from_arrays(mesh_vertices: np.ndarray, mesh_elements: np.ndarray, 
     tag = gmsh.model.add_discrete_entity(dim)
 
     max_node = gmsh.model.mesh.getMaxNodeTag()
-    if max_node == 0:
-        max_node = 1
-    node_tags = max_node + np.array(range(mesh[0].shape[0]))
+    node_tags = max_node + 1 + np.array(range(mesh[0].shape[0]))
     gmsh.model.mesh.add_nodes(dim, tag, node_tags, mesh[0].ravel())
 
     max_element = gmsh.model.mesh.getMaxElementTag()
