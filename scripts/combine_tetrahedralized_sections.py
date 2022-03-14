@@ -21,6 +21,7 @@ plot_result = True
 filename_max_length = 200
 backup_filename = "tetrahedralized_mesh"
 
+
 def main():
     Tk().withdraw()
     filenames = askopenfilenames(title="Select meshes to combine")
@@ -34,7 +35,7 @@ def main():
 
     blocks = pv.MultiBlock(meshes)
     combined = blocks.combine()
-    combined.celltypes[np.where(combined.celltypes == vtkmodules.util.vtkConstants.VTK_QUAD)] = vtkmodules.util.vtkConstants.VTK_TETRA
+    # combined.celltypes[np.where(combined.celltypes == vtkmodules.util.vtkConstants.VTK_QUAD)] = vtkmodules.util.vtkConstants.VTK_TETRA
     # Save result
     output_filename = ""
     for filename in filenames:
@@ -45,16 +46,10 @@ def main():
     if not os.path.exists(output_directory):
         os.mkdir(output_directory)
 
-    mesh_triangles = combined.cells_dict[vtkmodules.util.vtkConstants.VTK_TRIANGLE]
-    mesh_tets = combined.cells_dict[vtkmodules.util.vtkConstants.VTK_TETRA]
-    meshio_faces = {"triangle": mesh_triangles, "quad": mesh_tets}
-    m = meshio.Mesh(combined.points, meshio_faces)
-
-    filename = f"{output_directory}/{output_filename}.ply"
+    filename = f"{output_directory}/{output_filename}.vtu"
     if len(filename) > filename_max_length:
-        filename = create_unique_file_name(base=backup_filename, extension=".ply")
-
-    m.write(f"{output_directory}/{filename}")
+        filename = create_unique_file_name(base=backup_filename, extension=".vtu")
+    combined.save(f"{output_directory}/{filename}")
 
     # Plot result
     p = pv.Plotter()

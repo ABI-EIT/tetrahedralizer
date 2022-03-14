@@ -24,8 +24,7 @@ def main():
         return
     Tk().destroy()
 
-    mesh = meshio.read(filename)
-    mesh = pyvista_tetrahedral_mesh_from_arrays(mesh.points, mesh.cells_dict["triangle"], mesh.cells_dict["quad"])
+    mesh = pv.read(filename)
 
     p = pv.Plotter()
     p.add_mesh(mesh, opacity=0.15, show_edges=True, edge_color="gray")

@@ -29,13 +29,14 @@ def main():
         return
     Tk().destroy()
 
+    # Load files
     meshes = [pv.read(filename) for filename in filenames]
     mesh_arrays = [(mesh.points, pyvista_faces_to_2d(mesh.faces)) for mesh in meshes]
+
+    # Tetrahedralize
     gmsh.initialize()
     nodes, elements = gmsh_tetrahedralize(mesh_arrays, gmsh_options)
     gmsh.finalize()
-
-    mesh = pyvista_tetrahedral_mesh_from_arrays(nodes, elements[0], elements[1])
 
     # Save result
     output_filename = ""
@@ -47,11 +48,8 @@ def main():
     if not os.path.exists(output_directory):
         os.mkdir(output_directory)
 
-    mesh_triangles = mesh.cells_dict[vtkmodules.util.vtkConstants.VTK_TRIANGLE]
-    mesh_tets = mesh.cells_dict[vtkmodules.util.vtkConstants.VTK_TETRA]
-    meshio_faces = {"triangle": mesh_triangles, "quad": mesh_tets}
-    m = meshio.Mesh(mesh.points, meshio_faces)
-    m.write(f"{output_directory}/{output_filename}.ply")
+    mesh = pyvista_tetrahedral_mesh_from_arrays(nodes, elements[0], elements[1])
+    mesh.save(f"{output_directory}/{output_filename}.vtu")
 
     # # Plot result
     p = pv.Plotter()
