@@ -7,6 +7,7 @@ import os
 import meshio
 import numpy as np
 from matplotlib import cm
+from pyvista_tools import pyvista_tetrahedral_mesh_from_arrays
 
 """
 App to view a mesh using the pyvista plane widget
@@ -23,17 +24,10 @@ def main():
         return
     Tk().destroy()
 
-    mesh = pv.read(filename)
+    mesh = meshio.read(filename)
+    mesh = pyvista_tetrahedral_mesh_from_arrays(mesh.points, mesh.cells_dict["triangle"], mesh.cells_dict["quad"])
 
     p = pv.Plotter()
-
-    # def plane_func(normal, origin):
-    #     slc = mesh.slice(normal=normal, origin=origin)
-    #     p.add_mesh(slc, color="black", name="slice", style="wireframe")
-    #
-    # p.add_mesh(mesh, color="white", opacity=0.5, show_edges=False, edge_color="gray")
-    # p.add_plane_widget(plane_func, assign_to_axis="z")
-
     p.add_mesh(mesh, opacity=0.15, show_edges=True, edge_color="gray")
 
     def plane_func(normal, origin):
@@ -41,7 +35,6 @@ def main():
         p.add_mesh(slc, name="slice", show_edges=True)
 
     p.add_plane_widget(plane_func, assign_to_axis="z")
-
     p.show()
 
 

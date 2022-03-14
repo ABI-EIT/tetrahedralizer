@@ -2,6 +2,8 @@ import itertools
 from typing import Union, List, Dict, Tuple
 
 import numpy as np
+import pyvista
+import vtkmodules.util
 from numpy.typing import NDArray
 import pyvista as pv
 from pyvista import UnstructuredGrid
@@ -259,3 +261,12 @@ def select_faces_using_points(mesh: pv.PolyData, points: list) -> List[int]:
             mesh_faces.append(j)
 
     return mesh_faces
+
+
+def pyvista_tetrahedral_mesh_from_arrays(nodes, tris, tets) -> pyvista.UnstructuredGrid:
+    cell_type = np.hstack([
+        np.ones(len(tris)) * vtkmodules.util.vtkConstants.VTK_TRIANGLE,
+        np.ones(len(tets)) * vtkmodules.util.vtkConstants.VTK_TETRA
+    ])
+    mesh = pv.UnstructuredGrid(np.hstack([pyvista_faces_to_1d(tris), pyvista_faces_to_1d(tets)]), cell_type, nodes)
+    return mesh

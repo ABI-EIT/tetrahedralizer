@@ -1,4 +1,3 @@
-import itertools
 import numpy as np
 import os
 import pathlib
@@ -8,7 +7,9 @@ import gmsh
 import json
 import pyvista as pv
 from typing import List, Tuple
-from pyvista_tools import pyvista_faces_to_2d, pyvista_faces_to_1d
+import vtkmodules
+from pyvista_tools import pyvista_faces_to_2d, pyvista_tetrahedral_mesh_from_arrays, pyvista_faces_by_dimension
+import meshio
 
 
 def main():
@@ -31,11 +32,9 @@ def main():
     mesh_arrays = [(mesh.points, pyvista_faces_to_2d(mesh.faces)) for mesh in meshes]
 
     nodes, elements = gmsh_tetrahedralize(mesh_arrays, gmsh_options)
+    gmsh.finalize()
 
-    # TODO this is not working, the output is all messed up. Nodes are almost right though
-    mesh = pv.PolyData(nodes, np.hstack([pyvista_faces_to_1d(elements[0]), pyvista_faces_to_1d(elements[1])]))
-
-    mesh.extract_all_edges().plot()
+    mesh = pyvista_tetrahedral_mesh_from_arrays(nodes, elements[0], elements[1])
 
     # Save result
     output_filename = ""
@@ -47,32 +46,31 @@ def main():
     if not os.path.exists(output_directory):
         os.mkdir(output_directory)
 
-    gmsh.write(f"{output_directory}/{output_filename}.msh")
+    mesh_triangles = mesh.cells_dict[vtkmodules.util.vtkConstants.VTK_TRIANGLE]
+    mesh_tets = mesh.cells_dict[vtkmodules.util.vtkConstants.VTK_TETRA]
+    meshio_faces = {"triangle": mesh_triangles, "quad": mesh_tets}
+    m = meshio.Mesh(mesh.points, meshio_faces)
+    m.write(f"{output_directory}/{output_filename}.ply")
 
     # # Plot result
-    # p = pv.Plotter()
-    #
-    # p.add_mesh(combined, opacity=0.15, show_edges=True, edge_color="gray")
-    #
-    # def plane_func(normal, origin):
-    #     slc = combined.slice(normal=normal, origin=origin)
-    #     p.add_mesh(slc, name="slice", show_edges=True)
-    #
-    # p.add_plane_widget(plane_func, assign_to_axis="z")
-    #
-    # p.add_title("Combined Tetrahedralized Lung Sections")
-    # p.show()
+    p = pv.Plotter()
+    p.add_mesh(mesh, opacity=0.15, show_edges=True, edge_color="gray")
 
-    gmsh.finalize()
+    def plane_func(normal, origin):
+        slc = mesh.slice(normal=normal, origin=origin)
+        p.add_mesh(slc, name="slice", show_edges=True)
+
+    p.add_plane_widget(plane_func, assign_to_axis="z")
+    p.add_title("Tetrahedralized Mesh")
+    p.show()
 
 
 def gmsh_tetrahedralize(meshes: List[Tuple[np.ndarray, np.ndarray]], gmsh_options: dict) \
         -> Tuple[np.ndarray, Tuple[np.ndarray, np.ndarray]]:
-    # Create count iterators to give all our nodes and elements unique tags
 
     gmsh.initialize()
     for mesh in meshes:
-        gmsh_load_from_arrays(mesh)
+        gmsh_load_from_arrays(mesh[0], mesh[1])
 
     # Create a volume from all the surfaces
     s = gmsh.model.get_entities(2)
@@ -86,12 +84,12 @@ def gmsh_tetrahedralize(meshes: List[Tuple[np.ndarray, np.ndarray]], gmsh_option
 
     gmsh.model.mesh.generate(3)
 
-    nodes, elements = gmsh_volume_to_arrays()
+    nodes, elements = gmsh_tetrahedral_mesh_to_arrays()
 
     return nodes, elements
 
 
-def gmsh_load_from_arrays(mesh: Tuple[np.ndarray, np.ndarray], dim: int = 2, msh_type: int = 2):
+def gmsh_load_from_arrays(mesh_vertices: np.ndarray, mesh_elements: np.ndarray, dim: int = 2, msh_type: int = 2):
     """
     Load a mesh into gmsh fram a set of vertex and face arrays.
     Gmsh must be initialized before using this function.
@@ -102,6 +100,7 @@ def gmsh_load_from_arrays(mesh: Tuple[np.ndarray, np.ndarray], dim: int = 2, msh
     dim
     msh_type
     """
+    mesh = (mesh_vertices, mesh_elements)
     tag = gmsh.model.add_discrete_entity(dim)
 
     max_node = gmsh.model.mesh.getMaxNodeTag()
@@ -116,10 +115,11 @@ def gmsh_load_from_arrays(mesh: Tuple[np.ndarray, np.ndarray], dim: int = 2, msh
     gmsh.model.mesh.add_elements(dim, tag, [msh_type], [element_tags], [element_node_tags.ravel()])
 
 
-def gmsh_volume_to_arrays() -> Tuple[np.ndarray, Tuple[np.ndarray, np.ndarray]]:
+def gmsh_tetrahedral_mesh_to_arrays() -> Tuple[np.ndarray, Tuple[np.ndarray, np.ndarray]]:
     _, coord, _ = gmsh.model.mesh.getNodes()
     nodes_array = np.array(coord).reshape(-1, 3)
     element_types, _, node_tags = gmsh.model.mesh.getElements()
+    node_tags = [np.array(tag_set) - 1 for tag_set in node_tags]
     if 2 in element_types:
         triangles = node_tags[np.argmax(element_types == 2)].reshape(-1, 3)
     else:

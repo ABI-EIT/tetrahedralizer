@@ -6,10 +6,11 @@ import os
 import meshio
 import numpy as np
 from matplotlib import cm
+import vtkmodules
 from pyvista_tools.pyvista_tools import pyvista_faces_by_dimension, pyvista_faces_to_2d
 
 """
-App combine gmsh .msh files
+App combine tetrahedral meshs
 """
 
 output_directory = "output"
@@ -29,25 +30,10 @@ def main():
 
     meshes = [pv.read(filename) for filename in filenames]
     for i, mesh in enumerate(meshes):
-        mesh.clear_cell_data()
         mesh.cell_data["Scalar"] = np.asarray([i % len(meshes)] * mesh.n_cells)
-        mesh.set_active_scalars("Scalar")
 
-    p = pv.Plotter()
-    cmap = cm.get_cmap("Accent")
     blocks = pv.MultiBlock(meshes)
     combined = blocks.combine()
-
-    p.add_mesh(combined, opacity=0.15, cmap=cmap, scalars="Scalar", show_edges=True, edge_color="gray")
-
-    def plane_func(normal, origin):
-        slc = combined.slice(normal=normal, origin=origin)
-        p.add_mesh(slc, name="slice", cmap=cmap, scalars="Scalar", show_edges=True)
-
-    p.add_plane_widget(plane_func, assign_to_axis="z")
-
-    p.add_title("Combined Tetrahedralized Lung Sections")
-    p.show()
 
     # Save result
     output_filename = ""
@@ -59,13 +45,9 @@ def main():
     if not os.path.exists(output_directory):
         os.mkdir(output_directory)
 
-    faces_by_dim = pyvista_faces_by_dimension(combined.cells)
-    meshio_faces = {
-        "triangle": pyvista_faces_to_2d(faces_by_dim[3]) if 3 in faces_by_dim else [],
-        "quad": pyvista_faces_to_2d(faces_by_dim[4]) if 4 in faces_by_dim else []
-    }
-
-    # Todo add color!
+    mesh_triangles = combined.cells_dict[vtkmodules.util.vtkConstants.VTK_TRIANGLE]
+    mesh_tets = combined.cells_dict[vtkmodules.util.vtkConstants.VTK_TETRA]
+    meshio_faces = {"triangle": mesh_triangles, "quad": mesh_tets}
     m = meshio.Mesh(combined.points, meshio_faces)
 
     filename = f"{output_directory}/{output_filename}.ply"
@@ -73,6 +55,19 @@ def main():
         filename = create_unique_file_name(base=backup_filename, extension=".ply")
 
     m.write(f"{output_directory}/{filename}")
+
+    # Plot result
+    p = pv.Plotter()
+    cmap = cm.get_cmap("Accent")
+    p.add_mesh(combined, opacity=0.15, cmap=cmap, show_edges=True, edge_color="gray")
+
+    def plane_func(normal, origin):
+        slc = combined.slice(normal=normal, origin=origin)
+        p.add_mesh(slc, name="slice", cmap=cmap, show_edges=True)
+
+    p.add_plane_widget(plane_func, assign_to_axis="z")
+    p.add_title("Combined Tetrahedralized Lung Sections")
+    p.show()
 
 
 def create_unique_file_name(directory=".", base="", extension=""):
