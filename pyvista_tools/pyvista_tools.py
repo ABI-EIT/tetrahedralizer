@@ -17,6 +17,9 @@ def remove_shared_faces(meshes: List[pv.PolyData], tolerance: float = None,
     boolean union, but works with intersections of zero volume. The meshes can optionally be returned unmerged. The
     removed points can also optionally be returned.
 
+    Todo: Use remove cells, and return removed cells.
+    Todo: Use Polydata.merge and return Polydata (Which can be saved as stl)
+
     Parameters
     ----------
     meshes

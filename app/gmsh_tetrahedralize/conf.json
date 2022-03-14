@@ -3,5 +3,6 @@
     "Mesh.MeshSizeMax": 10
   },
   "output_suffix": "gmshed",
-  "output_directory": "output"
+  "output_directory": "output",
+  "output_extension": ".vtu"
 }

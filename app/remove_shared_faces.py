@@ -22,6 +22,7 @@ combined surface of the entire lung.
 def main():
     output_directory = "output"
     output_suffix = "shared_faces_removed"
+    output_extension = ".stl"
 
     # Select files
     Tk().withdraw()
@@ -30,26 +31,27 @@ def main():
         return
     Tk().destroy()
 
+    # Load files
     meshes = [pv.PolyData(pv.read(filename)) for filename in filenames]
 
     # Combine lobes
     combined, removed_points = remove_shared_faces(meshes, return_removed_points=True)
 
     # Save result
+    if not os.path.exists(output_directory):
+        os.mkdir(output_directory)
+
     output_filename = ""
     for filename in filenames:
         mesh_path = pathlib.Path(filename)
         output_filename += f"{mesh_path.stem}_"
     output_filename += output_suffix
 
-    if not os.path.exists(output_directory):
-        os.mkdir(output_directory)
-
     m = meshio.Mesh(combined.points, {"triangle": pyvista_faces_to_2d(combined.cells)})
-    m.write(f"{output_directory}/{output_filename}.stl")
+    m.write(f"{output_directory}/{output_filename}{output_extension}")
 
     # Plot input meshes
-    cmap = cm.get_cmap("Set1")
+    cmap = cm.get_cmap("Set1")  # Choose a qualitative colormap to distinguish meshes
     p = pv.Plotter()
     for i, mesh in enumerate(meshes):
         p.add_mesh(mesh, style="wireframe", opacity=0.5, color=cmap(i)[:-1], line_width=2)
@@ -58,13 +60,14 @@ def main():
     p.add_title("Input Meshes")
     p.show()
 
-    # Plot result
+    # Create polydata of removed faces
     shared_faces_meshes = []
     for mesh, points in zip(meshes, removed_points):
         shared_faces_indices = select_faces_using_points(mesh, points)
         shared_faces = pyvista_faces_to_1d(pyvista_faces_to_2d(mesh.faces)[shared_faces_indices])
         shared_faces_meshes.append(pv.PolyData(mesh.points, faces=shared_faces))
 
+    # Plot removed faces
     p = pv.Plotter()
     p.add_mesh(combined, style="wireframe")
     for mesh in shared_faces_meshes:

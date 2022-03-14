@@ -10,19 +10,17 @@ import vtkmodules
 from pyvista_tools.pyvista_tools import pyvista_faces_by_dimension, pyvista_faces_to_2d
 
 """
-App combine tetrahedral meshs
+App combine tetrahedral meshes
 """
-
-output_directory = "output"
-output_suffix = "combined"
-plot_result = True
-
-# filename_max_length = 255
-filename_max_length = 200
-backup_filename = "tetrahedralized_mesh"
 
 
 def main():
+    output_directory = "output"
+    output_suffix = "combined"
+    output_extension = ".vtu"
+    filename_max_length = 200  # Tested on windows. Should be 255 though.
+    backup_filename = "tetrahedralized_mesh"
+
     Tk().withdraw()
     filenames = askopenfilenames(title="Select meshes to combine")
     if len(filenames) == 0:
@@ -35,20 +33,20 @@ def main():
 
     blocks = pv.MultiBlock(meshes)
     combined = blocks.combine()
-    # combined.celltypes[np.where(combined.celltypes == vtkmodules.util.vtkConstants.VTK_QUAD)] = vtkmodules.util.vtkConstants.VTK_TETRA
+
     # Save result
+    if not os.path.exists(output_directory):
+        os.mkdir(output_directory)
+
     output_filename = ""
     for filename in filenames:
         mesh_path = pathlib.Path(filename)
         output_filename += f"{mesh_path.stem}_"
     output_filename += output_suffix
 
-    if not os.path.exists(output_directory):
-        os.mkdir(output_directory)
-
-    filename = f"{output_directory}/{output_filename}.vtu"
+    filename = f"{output_directory}/{output_filename}{output_extension}"
     if len(filename) > filename_max_length:
-        filename = create_unique_file_name(base=backup_filename, extension=".vtu")
+        filename = create_unique_file_name(base=backup_filename, extension=output_extension)
     combined.save(f"{output_directory}/{filename}")
 
     # Plot result
@@ -66,7 +64,6 @@ def main():
 
 
 def create_unique_file_name(directory=".", base="", extension=""):
-
     addition = ""
     i = 0
     while True:

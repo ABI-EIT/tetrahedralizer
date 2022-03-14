@@ -20,6 +20,7 @@ def main():
 
     output_directory = config["output_directory"]
     output_suffix = config["output_suffix"]
+    output_extension = config["output_extension"]
     gmsh_options = config["gmsh_options"]
 
     # Select files
@@ -39,19 +40,19 @@ def main():
     gmsh.finalize()
 
     # Save result
+    if not os.path.exists(output_directory):
+        os.mkdir(output_directory)
+
     output_filename = ""
     for filename in filenames:
         mesh_path = pathlib.Path(filename)
         output_filename += f"{mesh_path.stem}_"
     output_filename += output_suffix
 
-    if not os.path.exists(output_directory):
-        os.mkdir(output_directory)
-
     mesh = pyvista_tetrahedral_mesh_from_arrays(nodes, elements[0], elements[1])
-    mesh.save(f"{output_directory}/{output_filename}.vtu")
+    mesh.save(f"{output_directory}/{output_filename}{output_extension}")
 
-    # # Plot result
+    #Plot result
     p = pv.Plotter()
     p.add_mesh(mesh, opacity=0.15, show_edges=True, edge_color="gray")
 

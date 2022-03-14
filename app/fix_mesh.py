@@ -18,14 +18,16 @@ def main():
     output_directory = "output"
     output_suffix = "fixed"
     repair_kwargs = None
+    output_extension = ".stl"
 
-    # Read
+    # Select File
     Tk().withdraw()
     filename = askopenfilename(title="Select mesh to fix")
     if filename == "":
         return
     Tk().destroy()
 
+    # Load File
     mesh = pv.read(filename)
 
     # Fix
@@ -36,8 +38,7 @@ def main():
     if not os.path.exists(output_directory):
         os.mkdir(output_directory)
 
-    m = meshio.Mesh(fixed_mesh.points, {"triangle": pyvista_faces_to_2d(fixed_mesh.faces)})
-    m.write(f"{output_directory}/{path.stem}_{output_suffix}.stl")
+    fixed_mesh.save(f"{output_directory}/{path.stem}_{output_suffix}{output_extension}")
 
     # Plot
     p = pv.Plotter()

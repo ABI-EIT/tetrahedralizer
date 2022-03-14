@@ -27,6 +27,7 @@ def main():
     output_directory = config["output_directory"]
     operation = config["operation"]
     output_suffix = operation
+    output_extension = config["output_extension"]
 
     # Select files
     Tk().withdraw()
@@ -50,17 +51,17 @@ def main():
     pv_booleaned_mesh = pv.PolyData(booleaned_mesh[0], pyvista_faces_to_1d(booleaned_mesh[1]))
 
     # Save result
+    if not os.path.exists(output_directory):
+        os.mkdir(output_directory)
+
     output_filename = ""
     for filename in [filename_a, filename_b]:
         mesh_path = pathlib.Path(filename)
         output_filename += f"{mesh_path.stem}_"
     output_filename += output_suffix
 
-    if not os.path.exists(output_directory):
-        os.mkdir(output_directory)
-
     m = meshio.Mesh(pv_booleaned_mesh.points, {"triangle": pyvista_faces_to_2d(pv_booleaned_mesh.faces)})
-    m.write(f"{output_directory}/{output_filename}.stl")
+    m.write(f"{output_directory}/{output_filename}{output_extension}")
 
     # Plot results
     blocks = pv.MultiBlock(meshes)
