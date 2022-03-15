@@ -119,14 +119,14 @@ def test_remove_shared_faces():
     c_merged_points = mesh_c_verts[:-1]
     c_merged_faces = pyvista_faces_to_1d(pyvista_faces_to_2d(mesh_c_faces)[:-4])
     c_merged = pv.PolyData(c_merged_points, c_merged_faces)
-    a_b_c_merged = pv.MultiBlock([a_merged, b_merged, c_merged]).combine(merge_points=True, tolerance=1e-05)
+    a_b_c_merged = a_merged.merge(b_merged).merge(c_merged)
 
     merged = remove_shared_faces([mesh_a, mesh_b, mesh_c])
 
     assert np.array_equal(a_b_c_merged.points, merged.points)
-    assert np.array_equal(a_b_c_merged.cells, merged.cells)
+    assert np.array_equal(a_b_c_merged.faces, merged.faces)
 
-    p = pv.PolyData(merged.points, merged.cells)
+    p = pv.PolyData(merged.points, merged.faces)
     assert p.is_manifold
 
 

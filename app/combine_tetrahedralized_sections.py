@@ -44,7 +44,7 @@ def main():
         output_filename += f"{mesh_path.stem}_"
     output_filename += output_suffix
 
-    filename = f"{output_directory}/{output_filename}{output_extension}"
+    filename = f"{output_filename}{output_extension}"
     if len(filename) > filename_max_length:
         filename = create_unique_file_name(base=backup_filename, extension=output_extension)
     combined.save(f"{output_directory}/{filename}")

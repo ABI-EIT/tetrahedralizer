@@ -1,13 +1,10 @@
 import pyvista as pv
-import pymeshfix
 from tkinter import Tk
 from tkinter.filedialog import askopenfilename
 import pathlib
 import os
-import meshio
-import numpy as np
-from typing import Tuple, Dict, Union, Optional
-from pyvista_tools import pyvista_faces_to_1d, pyvista_faces_to_2d
+
+from app import fix_mesh
 
 """
 App to apply meshfix to mesh and save
@@ -46,35 +43,6 @@ def main():
     if holes.number_of_points != 0:
         p.add_mesh(holes, color="r")
     p.show()
-
-
-def fix_mesh(mesh: pv.DataSet, repair_kwargs: Dict = None) -> Tuple[pv.DataSet, pv.PolyData]:
-    """
-    Call the meshfix.repair function on a Pyvista dataset and return a fixed copy of the dataset along with the meshfix
-    holes
-
-    Parameters
-    ----------
-    mesh
-        Pyvista Dataset
-    repair_kwargs
-        Kwargs for meshfix.repair
-
-    Returns
-    -------
-        Fixed copy of the input mesh, holes identified by meshfix
-
-    """
-    if repair_kwargs is None:
-        repair_kwargs = {}
-    meshfix = pymeshfix.MeshFix(mesh.points, pyvista_faces_to_2d(mesh.faces))
-    holes = meshfix.extract_holes()
-    meshfix.repair(**repair_kwargs)
-    fixed_mesh = mesh.copy()
-    fixed_mesh.points = meshfix.v
-    fixed_mesh.faces = pyvista_faces_to_1d(meshfix.f)
-
-    return fixed_mesh, holes
 
 
 if __name__ == "__main__":

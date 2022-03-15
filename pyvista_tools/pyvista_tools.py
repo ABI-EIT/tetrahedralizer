@@ -9,9 +9,9 @@ import pyvista as pv
 from pyvista import UnstructuredGrid
 
 
-def remove_shared_faces(meshes: List[pv.PolyData], tolerance: float = None,
+def remove_shared_faces(meshes: List[pv.DataSet], tolerance: float = None,
                         return_removed_points: bool = False, merge_result=True) -> Union[
-    Union[UnstructuredGrid, list], Tuple[Union[UnstructuredGrid, list], list]]:
+    Union[pv.PolyData, list], Tuple[Union[pv.PolyData, list], list]]:
     """
     Remove faces shared by any two of a list of Pyvista Polydata and merge the result. This is similar to the Pyvista
     boolean union, but works with intersections of zero volume. The meshes can optionally be returned unmerged. The
@@ -65,8 +65,9 @@ def remove_shared_faces(meshes: List[pv.PolyData], tolerance: float = None,
             trimmed_meshes.append(mesh.copy())
 
     if merge_result:
-        blocks = pv.MultiBlock(trimmed_meshes)
-        output = blocks.combine(merge_points=True, tolerance=1e-05)
+        output = pv.PolyData()
+        for mesh in trimmed_meshes:
+            output = output.merge(mesh, merge_points=True)
     else:
         output = trimmed_meshes
 

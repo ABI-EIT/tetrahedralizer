@@ -47,7 +47,7 @@ def main():
         output_filename += f"{mesh_path.stem}_"
     output_filename += output_suffix
 
-    m = meshio.Mesh(combined.points, {"triangle": pyvista_faces_to_2d(combined.cells)})
+    m = meshio.Mesh(combined.points, {"triangle": pyvista_faces_to_2d(combined.faces)})
     m.write(f"{output_directory}/{output_filename}{output_extension}")
 
     # Plot input meshes

@@ -13,11 +13,6 @@ from pyvista_tools import pyvista_tetrahedral_mesh_from_arrays
 App to view a mesh using the pyvista plane widget
 """
 
-output_directory = "output"
-output_suffix = "fixed"
-plot_result = True
-
-
 def main():
     Tk().withdraw()
     filename = askopenfilename(title="Select mesh to view")

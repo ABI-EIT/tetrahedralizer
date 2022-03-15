@@ -1,0 +1,9 @@
+{
+  "output_suffix": "tetrahedralized",
+  "output_directory": "output",
+  "output_extension": ".vtu",
+  "mesh_repair_kwargs": {},
+  "gmsh_options": {
+    "Mesh.MeshSizeMax": 10
+  }
+}
