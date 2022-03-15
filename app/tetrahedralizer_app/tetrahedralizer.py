@@ -112,7 +112,7 @@ def preprocess_and_tetrahedralize(outer_mesh: pv.DataSet, inner_meshes: List[pv.
     print("Tetrahedralizing...")
     # Tetrahedralize outer mesh with hole, then convert to pyvista
     nodes, elements = app.gmsh_tetrahedralize([fixed_mesh_arrays[0], fixed_combined_arrays], gmsh_options)
-    outer_tetrahedralized = pyvista_tools.pyvista_tetrahedral_mesh_from_arrays(nodes, elements[0], elements[1])
+    outer_tetrahedralized = pyvista_tools.pyvista_tetrahedral_mesh_from_arrays(nodes, elements[1])
 
     # Tetrahedralize each inner mesh, then convert to pyvista
     inner_tetrahedralized = []
@@ -120,7 +120,7 @@ def preprocess_and_tetrahedralize(outer_mesh: pv.DataSet, inner_meshes: List[pv.
     for mesh in fixed_diffed_arrays:
         nodes, elements = app.gmsh_tetrahedralize([mesh], gmsh_options)
         inner_tetrahedralized.append(
-            pyvista_tools.pyvista_tetrahedral_mesh_from_arrays(nodes, elements[0], elements[1]))
+            pyvista_tools.pyvista_tetrahedral_mesh_from_arrays(nodes, elements[1]))
 
     # Combine result
     meshes = [outer_tetrahedralized, *inner_tetrahedralized]

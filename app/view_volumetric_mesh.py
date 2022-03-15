@@ -23,11 +23,12 @@ def main():
     mesh = pv.read(filename)
 
     p = pv.Plotter()
-    p.add_mesh(mesh, opacity=0.15, show_edges=True, edge_color="gray")
+    cmap = cm.get_cmap("Accent")
+    p.add_mesh(mesh, opacity=0.15, cmap=cmap, show_edges=True, edge_color="gray")
 
     def plane_func(normal, origin):
         slc = mesh.slice(normal=normal, origin=origin)
-        p.add_mesh(slc, name="slice", show_edges=True)
+        p.add_mesh(slc, name="slice", cmap=cmap, show_edges=True)
 
     p.add_plane_widget(plane_func, assign_to_axis="z")
     p.show()

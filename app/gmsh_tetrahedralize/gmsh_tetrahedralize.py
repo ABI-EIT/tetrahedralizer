@@ -44,7 +44,7 @@ def main():
         output_filename += f"{mesh_path.stem}_"
     output_filename += output_suffix
 
-    mesh = pyvista_tetrahedral_mesh_from_arrays(nodes, elements[0], elements[1])
+    mesh = pyvista_tetrahedral_mesh_from_arrays(nodes, elements[1])
     mesh.save(f"{output_directory}/{output_filename}{output_extension}")
 
     #Plot result
