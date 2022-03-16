@@ -14,17 +14,20 @@ import os
 import pathlib
 from typing import Tuple
 import adv_prodcon
+from queue import Queue
 
 class MainWindow(QMainWindow, Ui_MainWindow):
     def __init__(self):
         super(MainWindow, self).__init__()
         self.setupUi(self)
+        self.redirect_std_out()
 
         self.outer_mesh = None
         self.inner_meshes = []
         self.tetrahedralized_mesh = None
         self.outer_mesh_filename = None
         self.inner_meshes_filenames = []
+        self.worker = None
 
         config_filename = "conf.json"
         with open(config_filename, "r") as f:
@@ -110,11 +113,12 @@ class MainWindow(QMainWindow, Ui_MainWindow):
 
         self.textEdit.append("Running tetrahedralization...")
 
-        worker = Worker(self.outer_mesh, self.inner_meshes, self.mesh_repair_kwargs, self.gmsh_options)
+        self.worker = Worker(self.outer_mesh, self.inner_meshes, self.mesh_repair_kwargs, self.gmsh_options)
         dummy_subscriber = adv_prodcon.Consumer()
-        worker.set_subscribers([dummy_subscriber.get_work_queue()])
-        worker.finished.connect(self.after_tetrahedralization)
-        worker.start_new()
+        self.worker.set_subscribers([dummy_subscriber.get_work_queue()])
+        self.worker.finished.connect(self.after_tetrahedralization)
+        self.worker.std_out.connect(self.append_text)
+        self.worker.start_new()
 
     def after_tetrahedralization(self, result: pv.UnstructuredGrid, error: str):
 
@@ -143,9 +147,24 @@ class MainWindow(QMainWindow, Ui_MainWindow):
 
         self.plot_volumes()
 
+    @pyqtSlot(str)
+    def append_text(self, text):
+        self.textEdit.append(text)
+
+    def redirect_std_out(self):
+        self.queue = Queue()
+        sys.stdout = WriteStream(self.queue)
+        self.thread = QThread()
+        self.receiver = Receiver(self.queue)
+        self.receiver.signal.connect(self.append_text)
+        self.receiver.moveToThread(self.thread)
+        self.thread.started.connect(self.receiver.run)
+        self.thread.start()
+
 
 class Worker(adv_prodcon.Producer, QObject):
     finished = pyqtSignal((pv.UnstructuredGrid, str))
+    std_out = pyqtSignal(str)
 
     def __init__(self, outer_mesh, inner_meshes, mesh_repair_kwargs, gmsh_options):
         super(adv_prodcon.Producer, self).__init__()
@@ -153,6 +172,19 @@ class Worker(adv_prodcon.Producer, QObject):
         self.work_kwargs = {"outer_mesh": outer_mesh, "inner_meshes": inner_meshes,
                             "mesh_repair_kwargs": mesh_repair_kwargs, "gmsh_options": gmsh_options}
 
+    @staticmethod
+    def on_start(state, message_pipe, *args, **kwargs):
+        class writer(object):
+            def __init__(self, pipe):
+                self.pipe = pipe
+
+            def write(self, text):
+                self.pipe.send(text)
+
+            def flush(self):
+                pass
+
+        sys.stdout = writer(message_pipe)
 
     @staticmethod
     def work(on_start_result, state, message_pipe, *args, **kwargs):
@@ -167,10 +199,42 @@ class Worker(adv_prodcon.Producer, QObject):
     def on_message_ready(self, message):
         if message == "Started":
             self.set_stopped()
+        else:
+            self.std_out.emit(message)
+
 
     def on_result_ready(self, result):
         self.finished.emit(result[0], result[1])
 
+
+
+# The new Stream Object which replaces the default stream associated with sys.stdout
+# This object just puts data in a queue!
+class WriteStream(object):
+    def __init__(self,queue):
+        self.queue = queue
+
+    def write(self, text):
+        self.queue.put(text)
+
+    def flush(self):
+        pass
+
+# A QObject (to be run in a QThread) which sits waiting for data to come through a Queue.Queue().
+# It blocks until data is available, and one it has got something from the queue, it sends
+# it to the "MainThread" by emitting a Qt Signal
+class Receiver(QObject):
+    signal = pyqtSignal(str)
+
+    def __init__(self,queue,*args,**kwargs):
+        QObject.__init__(self,*args,**kwargs)
+        self.queue = queue
+
+    @pyqtSlot()
+    def run(self):
+        while True:
+            text = self.queue.get()
+            self.signal.emit(text)
 
 if __name__ == "__main__":
     app = QtWidgets.QApplication(sys.argv)
