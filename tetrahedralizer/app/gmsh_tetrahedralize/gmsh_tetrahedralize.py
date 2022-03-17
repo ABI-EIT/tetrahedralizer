@@ -2,12 +2,11 @@ import os
 import pathlib
 from tkinter import Tk
 from tkinter.filedialog import askopenfilenames
-import gmsh
 import json
 import pyvista as pv
 
-from app.mesh_lib import gmsh_tetrahedralize
-from pyvista_tools import pyvista_faces_to_2d, pyvista_tetrahedral_mesh_from_arrays
+from tetrahedralizer.mesh_lib import gmsh_tetrahedralize
+from tetrahedralizer.pyvista_tools import pyvista_faces_to_2d, pyvista_tetrahedral_mesh_from_arrays
 
 
 def main():

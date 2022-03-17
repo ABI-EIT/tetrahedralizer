@@ -4,7 +4,7 @@ from tkinter.filedialog import askopenfilename
 import pathlib
 import os
 
-from app import fix_mesh
+from tetrahedralizer.mesh_lib import fix_mesh
 
 """
 App to apply meshfix to mesh and save

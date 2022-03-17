@@ -7,7 +7,7 @@ from tkinter import Tk
 from tkinter.filedialog import askopenfilenames
 from matplotlib import cm
 
-from pyvista_tools.pyvista_tools import remove_shared_faces, pyvista_faces_to_2d, pyvista_faces_to_1d, \
+from tetrahedralizer.pyvista_tools import remove_shared_faces, pyvista_faces_to_2d, pyvista_faces_to_1d, \
     select_faces_using_points
 
 """

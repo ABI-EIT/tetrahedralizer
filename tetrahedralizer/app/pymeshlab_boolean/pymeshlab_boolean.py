@@ -5,8 +5,8 @@ import meshio
 from tkinter import Tk
 from tkinter.filedialog import askopenfilename
 
-from app import pymeshlab_boolean
-from pyvista_tools.pyvista_tools import pyvista_faces_to_1d, pyvista_faces_to_2d
+from tetrahedralizer.mesh_lib import pymeshlab_boolean
+from tetrahedralizer.pyvista_tools import pyvista_faces_to_1d, pyvista_faces_to_2d
 import json
 
 

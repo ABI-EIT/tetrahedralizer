@@ -2,7 +2,7 @@ from tkinter import Tk
 from tkinter.filedialog import askopenfilename, askopenfilenames
 import json
 import pyvista as pv
-from app.mesh_lib import preprocess_and_tetrahedralize
+from tetrahedralizer.mesh_lib import preprocess_and_tetrahedralize
 from matplotlib import cm
 import os
 import pathlib

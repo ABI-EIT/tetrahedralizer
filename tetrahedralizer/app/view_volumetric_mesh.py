@@ -1,13 +1,7 @@
 import pyvista as pv
-import pymeshfix
 from tkinter import Tk
 from tkinter.filedialog import askopenfilename
-import pathlib
-import os
-import meshio
-import numpy as np
 from matplotlib import cm
-from pyvista_tools import pyvista_tetrahedral_mesh_from_arrays
 
 """
 App to view a mesh using the pyvista plane widget

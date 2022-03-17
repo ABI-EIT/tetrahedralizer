@@ -1,20 +1,19 @@
-import numpy as np
 from PyQt5 import QtWidgets, uic
-from PyQt5.QtCore import QObject, pyqtSignal, pyqtSlot, QThread, QProcess
+from PyQt5.QtCore import QObject, pyqtSignal, pyqtSlot, QThread
 import sys
 from tkinter import Tk
 from tkinter.filedialog import askopenfilename, askopenfilenames
-Ui_MainWindow, QMainWindow = uic.loadUiType("layout/tetrahedralizer_layout.ui")
 import pyvista as pv
 import json
-from app import preprocess_and_tetrahedralize
+from tetrahedralizer.mesh_lib import preprocess_and_tetrahedralize
 from pyvistaqt import QtInteractor
 from matplotlib import cm
 import os
 import pathlib
-from typing import Tuple
 import adv_prodcon
 from queue import Queue
+
+Ui_MainWindow, QMainWindow = uic.loadUiType("layout/tetrahedralizer_layout.ui")
 
 class MainWindow(QMainWindow, Ui_MainWindow):
     def __init__(self):
@@ -29,7 +28,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self.inner_meshes_filenames = []
         self.worker = None
 
-        config_filename = "conf.json"
+        config_filename = "../tetrahedralizer_app/conf.json"
         with open(config_filename, "r") as f:
             config = json.load(f)
 

@@ -4,14 +4,13 @@ from typing import Dict, Tuple, List, Optional
 import gmsh
 import numpy as np
 import pymeshfix
+from pymeshlab.pmeshlab import PyMeshLabException
 import pymeshlab
-import pymeshlab.pmeshlab
 import pyvista as pv
 
-import app
-import pyvista_tools
+from tetrahedralizer import pyvista_tools, app
 
-from pyvista_tools import pyvista_faces_to_2d, pyvista_faces_to_1d, remove_shared_faces
+from tetrahedralizer.pyvista_tools import pyvista_faces_to_2d, pyvista_faces_to_1d, remove_shared_faces
 
 
 def fix_mesh(mesh: pv.DataSet, repair_kwargs: Dict = None) -> Tuple[pv.DataSet, pv.PolyData]:
@@ -81,7 +80,7 @@ def pymeshlab_boolean(meshes: Tuple[Tuple[np.ndarray, np.ndarray], Tuple[np.ndar
     func = getattr(ms, pymeshlab_op_map[operation])
     try:
         func(first_mesh=0, second_mesh=1)
-    except pymeshlab.pmeshlab.PyMeshLabException:
+    except PyMeshLabException:
         return None
 
     booleaned_mesh = (ms.mesh(2).vertex_matrix(), ms.mesh(2).face_matrix())

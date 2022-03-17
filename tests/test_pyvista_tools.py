@@ -1,4 +1,4 @@
-from pyvista_tools import remove_shared_faces, select_shared_faces, select_points_in_faces, \
+from tetrahedralizer.pyvista_tools import remove_shared_faces, select_shared_faces, select_points_in_faces, \
     pyvista_faces_by_dimension, pyvista_faces_to_2d, pyvista_faces_to_1d, select_shared_points, \
     select_faces_using_points
 

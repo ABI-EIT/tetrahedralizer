@@ -1,6 +1,6 @@
 import gmsh
 import numpy as np
-from app.mesh_lib import gmsh_load_from_arrays, gmsh_tetrahedral_mesh_to_arrays
+from tetrahedralizer.mesh_lib import gmsh_load_from_arrays, gmsh_tetrahedral_mesh_to_arrays
 
 mesh_a_verts = np.array([[0, 0, 0],
                          [0, 0, 1],
