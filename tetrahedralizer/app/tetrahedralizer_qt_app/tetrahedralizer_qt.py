@@ -14,8 +14,20 @@ import adv_prodcon
 from queue import Queue
 import vtkmodules.all
 import multiprocessing
+from pathlib import Path
+import sys
 
-Ui_MainWindow, QMainWindow = uic.loadUiType("layout/tetrahedralizer_layout.ui")
+# If we're in pyinstaller, set conf and output directories up one level so they are out of the mess
+file_directory = str(Path(__file__).parent)
+in_pyinstaller = getattr(sys, "frozen", False) and hasattr(sys, "_MEIPASS")
+if in_pyinstaller:
+    conf_directory = str(Path(file_directory).parent)
+    output_parent = str(Path(file_directory).parent)
+else:
+    conf_directory = file_directory
+    output_parent = file_directory
+
+Ui_MainWindow, QMainWindow = uic.loadUiType(file_directory + r"/layout/tetrahedralizer_layout.ui")
 
 
 class MainWindow(QMainWindow, Ui_MainWindow):
@@ -31,11 +43,11 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self.inner_meshes_filenames = []
         self.worker = None
 
-        config_filename = "conf.json"
+        config_filename = conf_directory + r"\conf.json"
         with open(config_filename, "r") as f:
             config = json.load(f)
 
-        self.output_directory = config["output_directory"]
+        self.output_directory = output_parent + r"\\" + config["output_directory"]
         self.output_suffix = config["output_suffix"]
         self.output_extension = config["output_extension"]
         self.mesh_repair_kwargs = config["mesh_repair_kwargs"]
