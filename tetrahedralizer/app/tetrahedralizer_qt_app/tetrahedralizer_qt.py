@@ -12,6 +12,7 @@ import os
 import pathlib
 import adv_prodcon
 from queue import Queue
+import vtkmodules.all
 
 Ui_MainWindow, QMainWindow = uic.loadUiType("layout/tetrahedralizer_layout.ui")
 
@@ -28,7 +29,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self.inner_meshes_filenames = []
         self.worker = None
 
-        config_filename = "../tetrahedralizer_app/conf.json"
+        config_filename = "conf.json"
         with open(config_filename, "r") as f:
             config = json.load(f)
 

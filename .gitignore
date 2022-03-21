@@ -136,3 +136,6 @@ output/
 
 # PyVista log files
 *_skipped*
+
+# Pyinstaller builds
+tetrahedralizer_qt
