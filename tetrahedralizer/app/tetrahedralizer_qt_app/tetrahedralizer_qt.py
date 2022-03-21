@@ -13,8 +13,10 @@ import pathlib
 import adv_prodcon
 from queue import Queue
 import vtkmodules.all
+import multiprocessing
 
 Ui_MainWindow, QMainWindow = uic.loadUiType("layout/tetrahedralizer_layout.ui")
+
 
 class MainWindow(QMainWindow, Ui_MainWindow):
     def __init__(self):
@@ -97,7 +99,8 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         if self.tetrahedralized_mesh is not None:
             self.plotter.clear()
             cmap = cm.get_cmap("Accent")
-            self.plotter.add_mesh(self.tetrahedralized_mesh, opacity=0.15, cmap=cmap, show_edges=True, edge_color="gray")
+            self.plotter.add_mesh(self.tetrahedralized_mesh, opacity=0.15, cmap=cmap, show_edges=True,
+                                  edge_color="gray")
 
             def plane_func(normal, origin):
                 slc = self.tetrahedralized_mesh.slice(normal=normal, origin=origin)
@@ -202,16 +205,14 @@ class Worker(adv_prodcon.Producer, QObject):
         else:
             self.std_out.emit(message)
 
-
     def on_result_ready(self, result):
         self.finished.emit(result[0], result[1])
-
 
 
 # The new Stream Object which replaces the default stream associated with sys.stdout
 # This object just puts data in a queue!
 class WriteStream(object):
-    def __init__(self,queue):
+    def __init__(self, queue):
         self.queue = queue
 
     def write(self, text):
@@ -220,14 +221,15 @@ class WriteStream(object):
     def flush(self):
         pass
 
+
 # A QObject (to be run in a QThread) which sits waiting for data to come through a Queue.Queue().
 # It blocks until data is available, and one it has got something from the queue, it sends
 # it to the "MainThread" by emitting a Qt Signal
 class Receiver(QObject):
     signal = pyqtSignal(str)
 
-    def __init__(self,queue,*args,**kwargs):
-        QObject.__init__(self,*args,**kwargs)
+    def __init__(self, queue, *args, **kwargs):
+        QObject.__init__(self, *args, **kwargs)
         self.queue = queue
 
     @pyqtSlot()
@@ -236,7 +238,9 @@ class Receiver(QObject):
             text = self.queue.get()
             self.signal.emit(text)
 
+
 if __name__ == "__main__":
+    multiprocessing.freeze_support()
     app = QtWidgets.QApplication(sys.argv)
     main_window = MainWindow()
     main_window.setWindowTitle("Tetrahedralizer")

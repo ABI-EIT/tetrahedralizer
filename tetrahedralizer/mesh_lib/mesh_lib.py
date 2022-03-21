@@ -162,7 +162,7 @@ def preprocess_and_tetrahedralize(outer_mesh: pv.DataSet, inner_meshes: List[pv.
     # Fix all inputs
     fixed_meshes = []
     for mesh in [outer_mesh, *inner_meshes]:
-        fixed_meshes.append(app.fix_mesh(mesh, mesh_repair_kwargs)[0])
+        fixed_meshes.append(fix_mesh(mesh, mesh_repair_kwargs)[0])
 
     # Convert to arrays for boolean process
     fixed_mesh_arrays = [(mesh.points, pyvista_faces_to_2d(mesh.faces)) for mesh in fixed_meshes]
@@ -179,25 +179,25 @@ def preprocess_and_tetrahedralize(outer_mesh: pv.DataSet, inner_meshes: List[pv.
     pv_diffed_meshes = [pv.PolyData(mesh[0], pyvista_faces_to_1d(mesh[1])) for mesh in diffed_meshes]
 
     # Fix booleaned meshes
-    fixed_unioned = [app.fix_mesh(mesh, mesh_repair_kwargs)[0] for mesh in pv_unioned_meshes]
-    fixed_diffed = [app.fix_mesh(mesh, mesh_repair_kwargs)[0] for mesh in pv_diffed_meshes]
+    fixed_unioned = [fix_mesh(mesh, mesh_repair_kwargs)[0] for mesh in pv_unioned_meshes]
+    fixed_diffed = [fix_mesh(mesh, mesh_repair_kwargs)[0] for mesh in pv_diffed_meshes]
 
     print("Combining...")
     # Remove shared faces to form inner hole
     combined_unioned = remove_shared_faces(fixed_unioned)
-    fixed_combined = app.fix_mesh(combined_unioned)[0]
+    fixed_combined = fix_mesh(combined_unioned)[0]
     fixed_combined_arrays = (fixed_combined.points, pyvista_faces_to_2d(fixed_combined.faces))
 
     print("Tetrahedralizing...")
     # Tetrahedralize outer mesh with hole, then convert to pyvista
-    nodes, elements = app.gmsh_tetrahedralize([fixed_mesh_arrays[0], fixed_combined_arrays], gmsh_options)
+    nodes, elements = gmsh_tetrahedralize([fixed_mesh_arrays[0], fixed_combined_arrays], gmsh_options)
     outer_tetrahedralized = pyvista_tools.pyvista_tetrahedral_mesh_from_arrays(nodes, elements[1])
 
     # Tetrahedralize each inner mesh, then convert to pyvista
     inner_tetrahedralized = []
     fixed_diffed_arrays = [(mesh.points, pyvista_faces_to_2d(mesh.faces)) for mesh in fixed_diffed]
     for mesh in fixed_diffed_arrays:
-        nodes, elements = app.gmsh_tetrahedralize([mesh], gmsh_options)
+        nodes, elements = gmsh_tetrahedralize([mesh], gmsh_options)
         inner_tetrahedralized.append(
             pyvista_tools.pyvista_tetrahedral_mesh_from_arrays(nodes, elements[1]))
 
@@ -217,7 +217,7 @@ def union_any_intersecting(meshes: List[Tuple[np.ndarray, np.ndarray]]) -> List[
     # Iterate through all pairs and create sets of intersecting meshes
     for (index_a, mesh_a), (index_b, mesh_b) in itertools.combinations(enumerate(meshes), 2):
         # If they intersect
-        if app.pymeshlab_boolean((mesh_a, mesh_b), operation="Intersection") is not None:
+        if pymeshlab_boolean((mesh_a, mesh_b), operation="Intersection") is not None:
             # If a is already part of a set, add b to it
             if np.any([index_a in s for s in intersection_sets]):
                 intersection_sets[np.argmax([index_a in s for s in intersection_sets])].add(index_b)
@@ -232,9 +232,9 @@ def union_any_intersecting(meshes: List[Tuple[np.ndarray, np.ndarray]]) -> List[
     unioned_meshes = []
     for intersection_set in intersection_sets:
         set_list = list(intersection_set)
-        union_result = app.pymeshlab_boolean((meshes[set_list[0]], meshes[set_list[1]]), operation="Union")
+        union_result = pymeshlab_boolean((meshes[set_list[0]], meshes[set_list[1]]), operation="Union")
         for index in set_list[2:]:
-            union_result = app.pymeshlab_boolean((union_result, meshes[index]), operation="Union")
+            union_result = pymeshlab_boolean((union_result, meshes[index]), operation="Union")
         unioned_meshes.append(union_result)
 
     # Put back in any that weren't unioned
@@ -254,7 +254,7 @@ def dif_any_intersecting(meshes: List[Tuple[np.ndarray, np.ndarray]]) -> List[Tu
     index_b: object
     for (index_a, mesh_a), (index_b, mesh_b) in itertools.combinations(enumerate(meshes), 2):
         # If they intersect
-        if app.pymeshlab_boolean((mesh_a, mesh_b), operation="Intersection") is not None:
+        if pymeshlab_boolean((mesh_a, mesh_b), operation="Intersection") is not None:
             # If we've already seen a, add b dif a to dif pairs
             if index_a in intersection_list:
                 intersection_list.append(index_b)
@@ -271,7 +271,7 @@ def dif_any_intersecting(meshes: List[Tuple[np.ndarray, np.ndarray]]) -> List[Tu
     # Diff all the pairs
     diffed_meshes = []
     for pair in dif_pairs:
-        diffed_meshes.append(app.pymeshlab_boolean((meshes[pair[0]], meshes[pair[1]]), operation="Difference"))
+        diffed_meshes.append(pymeshlab_boolean((meshes[pair[0]], meshes[pair[1]]), operation="Difference"))
 
     # Put back in any that weren't diffed
     diffed_indices = [pair[0] for pair in dif_pairs]
