@@ -12,9 +12,14 @@ def install():
     """
     package_dir = str(Path(tetrahedralizer.__file__).parent)
     working_dir = os.getcwd()
-    workpath = working_dir + r"\build"
-    distpath = working_dir + r"\tetrahedralizer_qt"
+    workpath = str(Path(working_dir + r"\build"))
+    distpath = str(Path(working_dir + r"\tetrahedralizer_qt"))
     specpath = working_dir
+
+    app_path = str(Path(package_dir + r"\app\tetrahedralizer_qt_app\tetrahedralizer_qt.py"))
+    layout_path = str(Path(package_dir + r"\app\tetrahedralizer_qt_app\layout\tetrahedralizer_layout.ui"))
+    conf_path = str(Path(package_dir + r"\app\tetrahedralizer_qt_app\conf.json"))
+    hooks_dir = str(Path(package_dir + r"\install_scripts"))
 
     # Remove the distribution directory manually, since pyinstaller doesn't know about everything we put there
     if os.path.exists(distpath):
@@ -22,13 +27,13 @@ def install():
 
     sep = os.pathsep
     PyInstaller.__main__.run([
-        package_dir + r"\app\tetrahedralizer_qt_app\tetrahedralizer_qt.py",
-        "--add-data=" + package_dir + r"\app\tetrahedralizer_qt_app\layout\tetrahedralizer_layout.ui" + sep + "layout",
-        "--add-data=" + package_dir + r"\app\tetrahedralizer_qt_app\conf.json" + sep + ".",
+        app_path,
+        "--add-data=" + layout_path + sep + "layout",
+        "--add-data=" + conf_path + sep + ".",
         "--hidden-import=vtkmodules",
         "--hidden-import=vtkmodules.vtkFiltersGeneral",
         "--collect-all=pymeshlab",
-        "--additional-hooks-dir=" + package_dir + r"\install_scripts",
+        "--additional-hooks-dir=" + hooks_dir,
         "--windowed",
         "--workpath=" + workpath,
         "--distpath=" + distpath,
