@@ -1,0 +1,381 @@
+
+<!DOCTYPE html>
+
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>tetrahedralizer.pyvista_tools.pyvista_tools &#8212; Tetrahedralizer 0.0.1 documentation</title>
+    <link rel="stylesheet" type="text/css" href="../../../_static/pygments.css" />
+    <link rel="stylesheet" type="text/css" href="../../../_static/alabaster.css" />
+    <link rel="stylesheet" type="text/css" href="../../../_static/css/custom.css" />
+    <script data-url_root="../../../" id="documentation_options" src="../../../_static/documentation_options.js"></script>
+    <script src="../../../_static/jquery.js"></script>
+    <script src="../../../_static/underscore.js"></script>
+    <script src="../../../_static/doctools.js"></script>
+    <link rel="index" title="Index" href="../../../genindex.html" />
+    <link rel="search" title="Search" href="../../../search.html" />
+   
+  <link rel="stylesheet" href="../../../_static/custom.css" type="text/css" />
+  
+  
+  <meta name="viewport" content="width=device-width, initial-scale=0.9, maximum-scale=0.9" />
+
+  </head><body>
+  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          
+
+          <div class="body" role="main">
+            
+  <h1>Source code for tetrahedralizer.pyvista_tools.pyvista_tools</h1><div class="highlight"><pre>
+<span></span><span class="kn">import</span> <span class="nn">itertools</span>
+<span class="kn">from</span> <span class="nn">typing</span> <span class="kn">import</span> <span class="n">Union</span><span class="p">,</span> <span class="n">List</span><span class="p">,</span> <span class="n">Dict</span><span class="p">,</span> <span class="n">Tuple</span>
+
+<span class="kn">import</span> <span class="nn">numpy</span> <span class="k">as</span> <span class="nn">np</span>
+<span class="kn">import</span> <span class="nn">pyvista</span>
+<span class="kn">import</span> <span class="nn">vtkmodules.util</span>
+<span class="kn">from</span> <span class="nn">numpy.typing</span> <span class="kn">import</span> <span class="n">NDArray</span>
+<span class="kn">import</span> <span class="nn">pyvista</span> <span class="k">as</span> <span class="nn">pv</span>
+<span class="kn">from</span> <span class="nn">pyvista</span> <span class="kn">import</span> <span class="n">UnstructuredGrid</span>
+
+
+<div class="viewcode-block" id="remove_shared_faces"><a class="viewcode-back" href="../../../api.html#tetrahedralizer.pyvista_tools.remove_shared_faces">[docs]</a><span class="k">def</span> <span class="nf">remove_shared_faces</span><span class="p">(</span><span class="n">meshes</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">pv</span><span class="o">.</span><span class="n">DataSet</span><span class="p">],</span> <span class="n">tolerance</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+                        <span class="n">return_removed_points</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span> <span class="n">merge_result</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Union</span><span class="p">[</span>
+    <span class="n">Union</span><span class="p">[</span><span class="n">pv</span><span class="o">.</span><span class="n">PolyData</span><span class="p">,</span> <span class="nb">list</span><span class="p">],</span> <span class="n">Tuple</span><span class="p">[</span><span class="n">Union</span><span class="p">[</span><span class="n">pv</span><span class="o">.</span><span class="n">PolyData</span><span class="p">,</span> <span class="nb">list</span><span class="p">],</span> <span class="nb">list</span><span class="p">]]:</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Remove faces shared by any two of a list of Pyvista Polydata and merge the result. This is similar to the Pyvista</span>
+<span class="sd">    boolean union, but works with intersections of zero volume. The meshes can optionally be returned unmerged. The</span>
+<span class="sd">    removed points can also optionally be returned.</span>
+
+<span class="sd">    Todo: Use remove cells, and return removed cells.</span>
+<span class="sd">    Todo: Use Polydata.merge and return Polydata (Which can be saved as stl)</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    meshes</span>
+<span class="sd">        List of meshes to merge</span>
+<span class="sd">    tolerance</span>
+<span class="sd">        Tolerance for selecting shared points</span>
+<span class="sd">    merge_result</span>
+<span class="sd">        If true, returns meshes merged. Otherwise returns as a list. Default True</span>
+<span class="sd">    return_removed_points</span>
+<span class="sd">        If true, returns a list of points that were removed. (Points are returned not faces since Pyvista rebuilds</span>
+<span class="sd">        meshes by removing points not faces. The points that are removed are those that were exclusively used by the</span>
+<span class="sd">        shared faces.)</span>
+
+<span class="sd">    Returns</span>
+<span class="sd">    -------</span>
+<span class="sd">    Unstructured grid representing the combination of the input meshes, with shared walls removed. Alternatively,</span>
+<span class="sd">    a copy of the input list of meshes with shared walls removed.</span>
+
+<span class="sd">    Optionally, list of points that were removed.</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="c1"># For each pair:</span>
+    <span class="n">points_to_remove</span> <span class="o">=</span> <span class="p">[[]</span> <span class="k">for</span> <span class="n">_</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">meshes</span><span class="p">))]</span>
+    <span class="k">for</span> <span class="p">(</span><span class="n">index_a</span><span class="p">,</span> <span class="n">mesh_a</span><span class="p">),</span> <span class="p">(</span><span class="n">index_b</span><span class="p">,</span> <span class="n">mesh_b</span><span class="p">)</span> <span class="ow">in</span> <span class="n">itertools</span><span class="o">.</span><span class="n">combinations</span><span class="p">(</span><span class="nb">enumerate</span><span class="p">(</span><span class="n">meshes</span><span class="p">),</span> <span class="mi">2</span><span class="p">):</span>
+        <span class="n">shared_points_kwargs</span> <span class="o">=</span> <span class="p">{</span><span class="s2">&quot;mesh_a&quot;</span><span class="p">:</span> <span class="n">mesh_a</span><span class="p">,</span> <span class="s2">&quot;mesh_b&quot;</span><span class="p">:</span> <span class="n">mesh_b</span><span class="p">,</span> <span class="s2">&quot;tolerance&quot;</span><span class="p">:</span> <span class="n">tolerance</span><span class="p">}</span>
+        <span class="n">shared_points_a</span><span class="p">,</span> <span class="n">shared_points_b</span> <span class="o">=</span> <span class="n">select_shared_points</span><span class="p">(</span><span class="o">**</span><span class="p">{</span><span class="n">k</span><span class="p">:</span> <span class="n">v</span> <span class="k">for</span> <span class="n">k</span><span class="p">,</span> <span class="n">v</span> <span class="ow">in</span> <span class="n">shared_points_kwargs</span><span class="o">.</span><span class="n">items</span><span class="p">()</span> <span class="k">if</span> <span class="n">v</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">})</span>
+
+        <span class="n">mesh_a_faces</span> <span class="o">=</span> <span class="n">select_faces_using_points</span><span class="p">(</span><span class="n">mesh_a</span><span class="p">,</span> <span class="n">shared_points_a</span><span class="p">)</span>
+        <span class="n">mesh_b_faces</span> <span class="o">=</span> <span class="n">select_faces_using_points</span><span class="p">(</span><span class="n">mesh_b</span><span class="p">,</span> <span class="n">shared_points_b</span><span class="p">)</span>
+
+        <span class="n">to_delete_mesh_a</span> <span class="o">=</span> <span class="n">select_points_in_faces</span><span class="p">(</span><span class="n">mesh_a</span><span class="p">,</span> <span class="n">shared_points_a</span><span class="p">,</span> <span class="n">mesh_a_faces</span><span class="p">,</span> <span class="n">exclusive</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+        <span class="n">to_delete_mesh_b</span> <span class="o">=</span> <span class="n">select_points_in_faces</span><span class="p">(</span><span class="n">mesh_b</span><span class="p">,</span> <span class="n">shared_points_b</span><span class="p">,</span> <span class="n">mesh_b_faces</span><span class="p">,</span> <span class="n">exclusive</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+
+        <span class="n">points_to_remove</span><span class="p">[</span><span class="n">index_a</span><span class="p">]</span><span class="o">.</span><span class="n">extend</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">to_delete_mesh_a</span><span class="p">))</span>
+        <span class="n">points_to_remove</span><span class="p">[</span><span class="n">index_b</span><span class="p">]</span><span class="o">.</span><span class="n">extend</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">to_delete_mesh_b</span><span class="p">))</span>
+
+    <span class="n">trimmed_meshes</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="k">for</span> <span class="n">i</span><span class="p">,</span> <span class="n">mesh</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">meshes</span><span class="p">):</span>
+        <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">points_to_remove</span><span class="p">[</span><span class="n">i</span><span class="p">])</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
+            <span class="n">trimmed</span><span class="p">,</span> <span class="n">_</span> <span class="o">=</span> <span class="n">mesh</span><span class="o">.</span><span class="n">remove_points</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">points_to_remove</span><span class="p">[</span><span class="n">i</span><span class="p">]))</span>
+            <span class="n">trimmed_meshes</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">trimmed</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">trimmed_meshes</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">mesh</span><span class="o">.</span><span class="n">copy</span><span class="p">())</span>
+
+    <span class="k">if</span> <span class="n">merge_result</span><span class="p">:</span>
+        <span class="n">output</span> <span class="o">=</span> <span class="n">pv</span><span class="o">.</span><span class="n">PolyData</span><span class="p">()</span>
+        <span class="k">for</span> <span class="n">mesh</span> <span class="ow">in</span> <span class="n">trimmed_meshes</span><span class="p">:</span>
+            <span class="n">output</span> <span class="o">=</span> <span class="n">output</span><span class="o">.</span><span class="n">merge</span><span class="p">(</span><span class="n">mesh</span><span class="p">,</span> <span class="n">merge_points</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="n">output</span> <span class="o">=</span> <span class="n">trimmed_meshes</span>
+
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">return_removed_points</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">output</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">output</span><span class="p">,</span> <span class="n">points_to_remove</span></div>
+
+
+<span class="k">def</span> <span class="nf">select_shared_faces</span><span class="p">(</span><span class="n">mesh_a</span><span class="p">:</span> <span class="n">pv</span><span class="o">.</span><span class="n">PolyData</span><span class="p">,</span> <span class="n">mesh_b</span><span class="p">:</span> <span class="n">pv</span><span class="o">.</span><span class="n">PolyData</span><span class="p">,</span> <span class="n">tolerance</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="nb">list</span><span class="p">,</span> <span class="nb">list</span><span class="p">]:</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Select that faces that two meshes share. Shared faces are determined by selecting the faces that use shared points.</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    mesh_a</span>
+<span class="sd">        First mesh</span>
+<span class="sd">    mesh_b</span>
+<span class="sd">        Second mesh</span>
+<span class="sd">    tolerance</span>
+<span class="sd">        Tolerance for selecting shared points</span>
+
+<span class="sd">    Returns</span>
+<span class="sd">    -------</span>
+<span class="sd">    Tuple of lists containing the indices of the shared faces in mesh_a and mesh_b</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">shared_points_kwargs</span> <span class="o">=</span> <span class="p">{</span><span class="s2">&quot;mesh_a&quot;</span><span class="p">:</span> <span class="n">mesh_a</span><span class="p">,</span> <span class="s2">&quot;mesh_b&quot;</span><span class="p">:</span> <span class="n">mesh_b</span><span class="p">,</span> <span class="s2">&quot;tolerance&quot;</span><span class="p">:</span> <span class="n">tolerance</span><span class="p">}</span>
+    <span class="n">shared_points</span> <span class="o">=</span> <span class="n">select_shared_points</span><span class="p">(</span><span class="o">**</span><span class="p">{</span><span class="n">k</span><span class="p">:</span> <span class="n">v</span> <span class="k">for</span> <span class="n">k</span><span class="p">,</span> <span class="n">v</span> <span class="ow">in</span> <span class="n">shared_points_kwargs</span><span class="o">.</span><span class="n">items</span><span class="p">()</span> <span class="k">if</span> <span class="n">v</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">})</span>
+
+    <span class="n">mesh_a_faces</span> <span class="o">=</span> <span class="n">select_faces_using_points</span><span class="p">(</span><span class="n">mesh_a</span><span class="p">,</span> <span class="n">shared_points</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span>
+    <span class="n">mesh_b_faces</span> <span class="o">=</span> <span class="n">select_faces_using_points</span><span class="p">(</span><span class="n">mesh_b</span><span class="p">,</span> <span class="n">shared_points</span><span class="p">[</span><span class="mi">1</span><span class="p">])</span>
+
+    <span class="k">return</span> <span class="n">mesh_a_faces</span><span class="p">,</span> <span class="n">mesh_b_faces</span>
+
+
+<span class="k">def</span> <span class="nf">select_points_in_faces</span><span class="p">(</span><span class="n">mesh</span><span class="p">:</span> <span class="n">pv</span><span class="o">.</span><span class="n">PolyData</span><span class="p">,</span> <span class="n">points</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">faces</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+                           <span class="n">exclusive</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">List</span><span class="p">[</span><span class="nb">int</span><span class="p">]:</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Select points used in the faces of a mesh. Optionally specify a subset of points and/or faces to check. When</span>
+<span class="sd">    exclusive is set to True, selects only points that are not used in the remaining faces.</span>
+
+<span class="sd">    Only works on meshes with all the same number of points per face.</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    mesh</span>
+<span class="sd">        Mesh to select from</span>
+<span class="sd">    points</span>
+<span class="sd">        Optional subset of points in mesh to select from</span>
+<span class="sd">    faces</span>
+<span class="sd">        Optional subset of faces in mesh to test</span>
+<span class="sd">    exclusive</span>
+<span class="sd">        If true, selects only points exclusively used in the specified faces</span>
+
+<span class="sd">    Returns</span>
+<span class="sd">    -------</span>
+<span class="sd">    List of points used in the specified faces</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">mesh_faces_2d</span> <span class="o">=</span> <span class="n">pyvista_faces_to_2d</span><span class="p">(</span><span class="n">mesh</span><span class="o">.</span><span class="n">faces</span><span class="p">)</span>
+    <span class="n">faces_2d</span> <span class="o">=</span> <span class="n">mesh_faces_2d</span><span class="p">[</span><span class="n">faces</span><span class="p">]</span>
+    <span class="n">remaining_faces</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">delete</span><span class="p">(</span><span class="n">mesh_faces_2d</span><span class="p">,</span> <span class="n">faces</span><span class="p">,</span> <span class="mi">0</span><span class="p">)</span>
+
+    <span class="c1"># Check if any given point exists in the faces to search</span>
+    <span class="n">used_in_faces</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="k">for</span> <span class="n">point</span> <span class="ow">in</span> <span class="n">points</span><span class="p">:</span>
+        <span class="k">if</span> <span class="nb">any</span><span class="p">(</span><span class="n">point</span> <span class="ow">in</span> <span class="n">face</span> <span class="k">for</span> <span class="n">face</span> <span class="ow">in</span> <span class="n">faces_2d</span><span class="p">):</span>
+            <span class="n">used_in_faces</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">point</span><span class="p">)</span>
+
+    <span class="c1"># If exclusive is set, remove points that also exist in the remaining faces</span>
+    <span class="n">excluded_points</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="k">if</span> <span class="n">exclusive</span><span class="p">:</span>
+        <span class="k">for</span> <span class="n">point</span> <span class="ow">in</span> <span class="n">used_in_faces</span><span class="p">:</span>
+            <span class="k">if</span> <span class="nb">any</span><span class="p">(</span><span class="n">point</span> <span class="ow">in</span> <span class="n">face</span> <span class="k">for</span> <span class="n">face</span> <span class="ow">in</span> <span class="n">remaining_faces</span><span class="p">):</span>
+                <span class="n">excluded_points</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">point</span><span class="p">)</span>
+
+    <span class="n">used_in_faces</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="nb">set</span><span class="p">(</span><span class="n">used_in_faces</span><span class="p">)</span> <span class="o">-</span> <span class="nb">set</span><span class="p">(</span><span class="n">excluded_points</span><span class="p">))</span>
+
+    <span class="k">return</span> <span class="n">used_in_faces</span>
+
+
+<span class="k">def</span> <span class="nf">pyvista_faces_by_dimension</span><span class="p">(</span><span class="n">faces</span><span class="p">:</span> <span class="n">NDArray</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="n">NDArray</span><span class="p">]:</span>
+    <span class="n">output</span> <span class="o">=</span> <span class="p">{}</span>
+    <span class="n">i</span> <span class="o">=</span> <span class="mi">0</span>
+    <span class="k">while</span> <span class="n">i</span> <span class="o">&lt;</span> <span class="nb">len</span><span class="p">(</span><span class="n">faces</span><span class="p">):</span>
+        <span class="c1"># Preceding each face is the &quot;padding&quot; indicating the number of elements in the face</span>
+        <span class="n">num_elems</span> <span class="o">=</span> <span class="n">faces</span><span class="p">[</span><span class="n">i</span><span class="p">]</span>
+        <span class="c1"># Append padding plus each element to the output dict</span>
+        <span class="k">if</span> <span class="n">num_elems</span> <span class="ow">in</span> <span class="n">output</span><span class="p">:</span>
+            <span class="n">output</span><span class="p">[</span><span class="n">num_elems</span><span class="p">]</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">output</span><span class="p">[</span><span class="n">num_elems</span><span class="p">],</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([</span><span class="n">faces</span><span class="p">[</span><span class="n">i</span><span class="o">+</span><span class="n">j</span><span class="p">]</span> <span class="k">for</span> <span class="n">j</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">num_elems</span><span class="o">+</span><span class="mi">1</span><span class="p">)]))</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">output</span><span class="p">[</span><span class="n">num_elems</span><span class="p">]</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([</span><span class="n">faces</span><span class="p">[</span><span class="n">i</span><span class="o">+</span><span class="n">j</span><span class="p">]</span> <span class="k">for</span> <span class="n">j</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">num_elems</span><span class="o">+</span><span class="mi">1</span><span class="p">)])</span>
+        <span class="c1"># Increment index to the next padding number</span>
+        <span class="n">i</span> <span class="o">+=</span> <span class="n">num_elems</span> <span class="o">+</span> <span class="mi">1</span>
+    <span class="k">return</span> <span class="n">output</span>
+
+
+<span class="k">def</span> <span class="nf">pyvista_faces_to_2d</span><span class="p">(</span><span class="n">faces</span><span class="p">:</span> <span class="n">NDArray</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">NDArray</span><span class="p">:</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Convert pyvista faces from the native 1d array to a 2d array with one face per row. Padding is trimmed.</span>
+
+<span class="sd">    Only works on a list of faces with all the same number of points per face.</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    faces</span>
+<span class="sd">        Faces to be reshaped</span>
+
+<span class="sd">    Returns</span>
+<span class="sd">    -------</span>
+<span class="sd">    2d array of faces</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">points_per_face</span> <span class="o">=</span> <span class="n">faces</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+    <span class="k">return</span> <span class="n">faces</span><span class="o">.</span><span class="n">reshape</span><span class="p">(</span><span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="n">points_per_face</span><span class="o">+</span><span class="mi">1</span><span class="p">)[:,</span> <span class="mi">1</span><span class="p">:]</span>
+
+
+<span class="k">def</span> <span class="nf">pyvista_faces_to_1d</span><span class="p">(</span><span class="n">faces</span><span class="p">:</span> <span class="n">NDArray</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">NDArray</span><span class="p">:</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Convert 2d array of faces to the pyvista native 1d format, inserting the padding.</span>
+
+<span class="sd">    Only works on a list of faces with all the same number of points per face.</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    faces</span>
+<span class="sd">        Faces to be reshaped</span>
+
+<span class="sd">    Returns</span>
+<span class="sd">    -------</span>
+<span class="sd">    1d array of faces</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">padding</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">faces</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span>
+    <span class="k">return</span> <span class="n">np</span><span class="o">.</span><span class="n">insert</span><span class="p">(</span><span class="n">faces</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="n">values</span><span class="o">=</span><span class="n">padding</span><span class="p">,</span> <span class="n">axis</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span><span class="o">.</span><span class="n">ravel</span><span class="p">()</span>
+
+
+<span class="k">def</span> <span class="nf">select_shared_points</span><span class="p">(</span><span class="n">mesh_a</span><span class="p">:</span> <span class="n">pv</span><span class="o">.</span><span class="n">PolyData</span><span class="p">,</span> <span class="n">mesh_b</span><span class="p">:</span> <span class="n">pv</span><span class="o">.</span><span class="n">PolyData</span><span class="p">,</span> <span class="n">tolerance</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">1e-05</span><span class="p">)</span> \
+        <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="n">List</span><span class="p">[</span><span class="nb">int</span><span class="p">],</span> <span class="n">List</span><span class="p">[</span><span class="nb">int</span><span class="p">]]:</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Select the points that two meshes share. Points are considered shared if they are within a specified euclidian</span>
+<span class="sd">    distance from one another.</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    mesh_a</span>
+<span class="sd">        First mesh</span>
+<span class="sd">    mesh_b</span>
+<span class="sd">        Second mesh</span>
+<span class="sd">    tolerance</span>
+<span class="sd">        Maximum euclidian distance between points to consider them shared</span>
+
+<span class="sd">    Returns</span>
+<span class="sd">    -------</span>
+<span class="sd">    shared_points</span>
+<span class="sd">        Tuple containing indices of shared points in mesh_a, and shared points in mesh_b</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">shared_points_a</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="n">shared_points_b</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="k">for</span> <span class="n">i_a</span><span class="p">,</span> <span class="n">point_a</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">mesh_a</span><span class="o">.</span><span class="n">points</span><span class="p">):</span>
+        <span class="k">for</span> <span class="n">i_b</span><span class="p">,</span> <span class="n">point_b</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">mesh_b</span><span class="o">.</span><span class="n">points</span><span class="p">):</span>
+            <span class="c1"># linalg.norm calculates euclidean distance</span>
+            <span class="k">if</span> <span class="n">np</span><span class="o">.</span><span class="n">linalg</span><span class="o">.</span><span class="n">norm</span><span class="p">(</span><span class="n">point_a</span> <span class="o">-</span> <span class="n">point_b</span><span class="p">)</span> <span class="o">&lt;=</span> <span class="n">tolerance</span><span class="p">:</span>
+                <span class="c1"># Need to remember the index of the shared point in both meshes so we can find faces that use it in both</span>
+                <span class="n">shared_points_a</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">i_a</span><span class="p">)</span>
+                <span class="n">shared_points_b</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">i_b</span><span class="p">)</span>
+
+    <span class="k">return</span> <span class="n">shared_points_a</span><span class="p">,</span> <span class="n">shared_points_b</span>
+
+
+<span class="k">def</span> <span class="nf">select_faces_using_points</span><span class="p">(</span><span class="n">mesh</span><span class="p">:</span> <span class="n">pv</span><span class="o">.</span><span class="n">PolyData</span><span class="p">,</span> <span class="n">points</span><span class="p">:</span> <span class="nb">list</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">List</span><span class="p">[</span><span class="nb">int</span><span class="p">]:</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Select all faces in a mesh that contain only the specified points.</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    mesh:</span>
+<span class="sd">        Mesh to select from</span>
+<span class="sd">    points</span>
+<span class="sd">        The only points in the given mesh that the selected faces may contain</span>
+
+<span class="sd">    Returns</span>
+<span class="sd">    -------</span>
+<span class="sd">    mesh_faces</span>
+<span class="sd">        List of indices of the selected faces in the mesh</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">mesh_faces</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="n">faces</span> <span class="o">=</span> <span class="n">mesh</span><span class="o">.</span><span class="n">faces</span><span class="o">.</span><span class="n">reshape</span><span class="p">(</span><span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="mi">4</span><span class="p">)[:,</span> <span class="mi">1</span><span class="p">:]</span>
+    <span class="n">points_set</span> <span class="o">=</span> <span class="nb">set</span><span class="p">(</span><span class="n">points</span><span class="p">)</span>
+    <span class="k">for</span> <span class="n">j</span><span class="p">,</span> <span class="n">face</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">faces</span><span class="p">):</span>
+        <span class="c1"># Check if all of the points in each face are in the target points set</span>
+        <span class="k">if</span> <span class="nb">set</span><span class="p">(</span><span class="n">face</span><span class="p">)</span><span class="o">.</span><span class="n">issubset</span><span class="p">(</span><span class="n">points_set</span><span class="p">):</span>
+            <span class="n">mesh_faces</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">j</span><span class="p">)</span>
+
+    <span class="k">return</span> <span class="n">mesh_faces</span>
+
+
+<span class="k">def</span> <span class="nf">pyvista_tetrahedral_mesh_from_arrays</span><span class="p">(</span><span class="n">nodes</span><span class="p">,</span> <span class="n">tets</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">pyvista</span><span class="o">.</span><span class="n">UnstructuredGrid</span><span class="p">:</span>
+    <span class="n">cell_type</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">hstack</span><span class="p">([</span>
+        <span class="n">np</span><span class="o">.</span><span class="n">ones</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">tets</span><span class="p">))</span> <span class="o">*</span> <span class="n">vtkmodules</span><span class="o">.</span><span class="n">util</span><span class="o">.</span><span class="n">vtkConstants</span><span class="o">.</span><span class="n">VTK_TETRA</span>
+    <span class="p">])</span>
+    <span class="n">mesh</span> <span class="o">=</span> <span class="n">pv</span><span class="o">.</span><span class="n">UnstructuredGrid</span><span class="p">(</span><span class="n">pyvista_faces_to_1d</span><span class="p">(</span><span class="n">tets</span><span class="p">),</span> <span class="n">cell_type</span><span class="p">,</span> <span class="n">nodes</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">mesh</span>
+</pre></div>
+
+          </div>
+          
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+<h1 class="logo"><a href="../../../index.html">Tetrahedralizer</a></h1>
+
+
+
+
+
+
+
+
+<h3>Navigation</h3>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../index.html">Tetrahedralizer</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../installation.html">Installation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../usage.html">User Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../api.html">API Reference</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../contributing.html">Contributing</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../authors.html">Credits</a></li>
+</ul>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="../../../index.html">Documentation overview</a><ul>
+  <li><a href="../../index.html">Module code</a><ul>
+  </ul></li>
+  </ul></li>
+</ul>
+</div>
+<div id="searchbox" style="display: none" role="search">
+  <h3 id="searchlabel">Quick search</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="../../../search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"/>
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</div>
+<script>$('#searchbox').show(0);</script>
+
+
+
+
+
+
+
+
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &copy;2022, Andrew Creegan.
+      
+      |
+      Powered by <a href="http://sphinx-doc.org/">Sphinx 4.4.0</a>
+      &amp; <a href="https://github.com/bitprophet/alabaster">Alabaster 0.7.12</a>
+      
+    </div>
+
+    
+
+    
+  </body>
+</html>

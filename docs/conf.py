@@ -30,8 +30,7 @@ release = '0.0.1'
 # Add any Sphinx extension module names here, as strings. They can be
 # extensions coming with Sphinx (named 'sphinx.ext.*') or your custom
 # ones.
-extensions = [
-]
+extensions = ['sphinx.ext.napoleon','sphinx.ext.autodoc', 'sphinx.ext.viewcode']
 
 # Add any paths that contain templates here, relative to this directory.
 templates_path = ['_templates']
@@ -54,7 +53,13 @@ html_theme = 'alabaster'
 # so a file named "default.css" will overwrite the builtin "default.css".
 html_static_path = ['_static']
 
+html_css_files = ['css/custom.css']
 
 html_theme_options = {
-    "sidebar_width": "250px"
+    "sidebar_width": "250px",
+    "page_width": "95%"
+}
+
+autodoc_default_options = {
+    'member-order': 'bysource'
 }

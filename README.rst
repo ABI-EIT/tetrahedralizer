@@ -50,8 +50,31 @@ app in your current directory. Run the app using tetrahedralizer_qt.exe containe
 Quick Start
 -----------
 To use the Tetrahedralizer app, simply select one outer mesh, representing the outermost boundary
-of the desired output mesh, and any number of inner meshes, representing the boundaries of inner
-sections of the output mesh. Click Tetrahedralize, and the automated process will begin, with
+of the desired output mesh, then select any number of inner meshes, representing the boundaries of inner
+sections of the output mesh:
+
+|select_outer| |select_inner|
+
+.. |select_outer| image:: _static/select_outer_mesh.png
+    :width: 45%
+
+.. |select_inner| image:: _static/select_inner_meshes.png
+    :width: 45%
+
+Click Tetrahedralize, and the automated process will begin, with
 progress displayed in the text box on the left had side of the screen. When finished, the
 resulting tetrahedralized mesh will be saved as a .vtu file in the output directory of the
-Tetrahedralizer installation.
+Tetrahedralizer installation:
+
+|in_progress| |done|
+
+.. |in_progress| image:: _static/Tetrahedralizer_in_progress.png
+    :width: 45%
+
+.. |done| image:: _static/tetrahedralizer_mock_done.png
+    :width: 45%
+
+
+Credits
+-------
+* Development Lead: Andrew Creegan <andrew.s.creegan@gmail.com>

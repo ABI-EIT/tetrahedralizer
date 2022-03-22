@@ -20,6 +20,7 @@ def install():
     if os.path.exists(distpath):
         shutil.rmtree(distpath)
 
+    # Todo: semicolons don't work on linux
     PyInstaller.__main__.run([
         package_dir + r"\app\tetrahedralizer_qt_app\tetrahedralizer_qt.py",
         "--add-data=" + package_dir + r"\app\tetrahedralizer_qt_app\layout\tetrahedralizer_layout.ui;layout",

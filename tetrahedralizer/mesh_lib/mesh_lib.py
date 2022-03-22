@@ -1,15 +1,12 @@
 import itertools
 from typing import Dict, Tuple, List, Optional
-
 import gmsh
 import numpy as np
 import pymeshfix
 from pymeshlab.pmeshlab import PyMeshLabException
 import pymeshlab
 import pyvista as pv
-
-from tetrahedralizer import pyvista_tools, app
-
+from tetrahedralizer import pyvista_tools
 from tetrahedralizer.pyvista_tools import pyvista_faces_to_2d, pyvista_faces_to_1d, remove_shared_faces
 
 
@@ -30,6 +27,7 @@ def fix_mesh(mesh: pv.DataSet, repair_kwargs: Dict = None) -> Tuple[pv.DataSet, 
         Fixed copy of the input mesh, holes identified by meshfix
 
     """
+
     if repair_kwargs is None:
         repair_kwargs = {}
     meshfix = pymeshfix.MeshFix(mesh.points, pyvista_faces_to_2d(mesh.faces))
@@ -42,6 +40,7 @@ def fix_mesh(mesh: pv.DataSet, repair_kwargs: Dict = None) -> Tuple[pv.DataSet, 
     return fixed_mesh, holes
 
 
+#: Dict to map names to pymeshlab boolean operations
 pymeshlab_op_map = {
     "Difference": pymeshlab.MeshSet.generate_boolean_difference.__name__,
     "Intersection": pymeshlab.MeshSet.generate_boolean_intersection.__name__,
@@ -55,8 +54,8 @@ def pymeshlab_boolean(meshes: Tuple[Tuple[np.ndarray, np.ndarray], Tuple[np.ndar
     """
     Run a pymesh boolean operation on two input meshes. The meshes are described as a platform agnostic Tuple of ndarrays
     representing mesh vertices and faces. The format is as follows:
-        Tuple element 0: 3xN ndarray of float representing XYZ points in 3D space
-        Tuple element 1: 3xN ndarray of int representing triangular faces composed of indices the points
+    Tuple element 0: 3xN ndarray of float representing XYZ points in 3D space
+    Tuple element 1: 3xN ndarray of int representing triangular faces composed of indices the points
 
     Parameters
     ----------
@@ -70,8 +69,8 @@ def pymeshlab_boolean(meshes: Tuple[Tuple[np.ndarray, np.ndarray], Tuple[np.ndar
     booleaned_mesh
         Result of the boolean operation in array format
 
-
     """
+
     ms = pymeshlab.MeshSet()
     for mesh in meshes:
         ml_mesh = pymeshlab.Mesh(mesh[0], mesh[1])
@@ -90,14 +89,18 @@ def pymeshlab_boolean(meshes: Tuple[Tuple[np.ndarray, np.ndarray], Tuple[np.ndar
 
 def gmsh_load_from_arrays(mesh_vertices: np.ndarray, mesh_elements: np.ndarray, dim: int = 2, msh_type: int = 2):
     """
-    Load a mesh into gmsh fram a set of vertex and face arrays.
-    Gmsh must be initialized before using this function.
+    Load a mesh into gmsh fram a set of vertex and face arrays. Gmsh must be initialized before using this function.
 
     Parameters
     ----------
-    mesh
+    mesh_vertices
+        3xN ndarray of float representing XYZ points in 3D space
+    mesh_elements
+        3xN ndarray of int representing triangular faces composed of indices the points
     dim
+        gmsh mesh dimension
     msh_type
+        gmsh mesh type
     """
     mesh = (mesh_vertices, mesh_elements)
     tag = gmsh.model.add_discrete_entity(dim)
@@ -113,6 +116,15 @@ def gmsh_load_from_arrays(mesh_vertices: np.ndarray, mesh_elements: np.ndarray, 
 
 
 def gmsh_tetrahedral_mesh_to_arrays() -> Tuple[np.ndarray, Tuple[np.ndarray, np.ndarray]]:
+    """
+    Obtain an array representation of the tetrahedral mesh in gmsh, if it exists.
+
+    Returns
+    -------
+    nodes_array, (triangles, tets)
+        3xN array of points, (3xN array of triangular faces, 4xN array of tetrahedral cells)
+
+    """
     _, coord, _ = gmsh.model.mesh.getNodes()
     nodes_array = np.array(coord).reshape(-1, 3)
     element_types, _, node_tags = gmsh.model.mesh.getElements()
@@ -135,6 +147,28 @@ class NotFoundError(Exception):
 
 def gmsh_tetrahedralize(meshes: List[Tuple[np.ndarray, np.ndarray]], gmsh_options: dict) \
         -> Tuple[np.ndarray, Tuple[np.ndarray, np.ndarray]]:
+    """
+    Run the gmsh tetrahedralization operation (mesh.generate(3)) on a group of surface meshes. Gmsh will interpret the
+    outermost mesh as the outer surface, and all other meshes as holes to generte in the tetrahedralization.
+
+    The meshes are described as a platform agnostic Tuple of ndarrays
+    representing mesh vertices and faces. The format is as follows:
+    Tuple element 0: 3xN ndarray of float representing XYZ points in 3D space
+    Tuple element 1: 3xN ndarray of int representing triangular faces composed of indices the points
+
+
+    Parameters
+    ----------
+    meshes
+        List of meshes to tetrahedralize
+    gmsh_options
+        Dict of values to be passed to gmsh.option.set_number
+    Returns
+    -------
+        Tetrahedralized mesh. Elements are now represented as a Tuple of ndarray. Element 0 is a 3xN array of surface
+        faces. Element 1 is a 4xN array of tetrahedral cells
+
+    """
     gmsh.initialize()
     for mesh in meshes:
         gmsh_load_from_arrays(mesh[0], mesh[1])
@@ -158,6 +192,28 @@ def gmsh_tetrahedralize(meshes: List[Tuple[np.ndarray, np.ndarray]], gmsh_option
 
 def preprocess_and_tetrahedralize(outer_mesh: pv.DataSet, inner_meshes: List[pv.DataSet], mesh_repair_kwargs: dict,
                                   gmsh_options: dict) -> pv.UnstructuredGrid:
+    """
+    Automatically create a tetrahedralization from multiple input surface meshes. The outer mesh represents the
+    outermost boundary of the output mesh, and the inner meshes represent the boundaries of individual inner sections
+    of the output mesh. The process is configurable with mesh_repair_kwargs and gmsh_options.
+
+    Parameters
+    ----------
+    outer_mesh
+        Pyvista DataSet representing the outer surface
+    inner_meshes
+        List of Pyvista DataSets representing the surfaces of inner sections
+    mesh_repair_kwargs
+        Kwargs for PyMeshfix
+    gmsh_options
+        Kwargs for gmsh
+
+    Returns
+    -------
+    combined
+        Pyvista unstructured grid
+
+    """
     print("Fixing...")
     # Fix all inputs
     fixed_meshes = []
@@ -212,6 +268,23 @@ def preprocess_and_tetrahedralize(outer_mesh: pv.DataSet, inner_meshes: List[pv.
 
 
 def union_any_intersecting(meshes: List[Tuple[np.ndarray, np.ndarray]]) -> List[Tuple[np.ndarray, np.ndarray]]:
+    """
+    Iterate through a list of surfaces and perform a boolean union on any that are intersecting.
+
+    Parameters
+    ----------
+    meshes
+        Input meshes represented as a Tuple of ndarray.
+            Tuple element 0: 3xN ndarray of float representing XYZ points in 3D space
+            Tuple element 1: 3xN ndarray of int representing triangular faces composed of indices the points
+
+    Returns
+    -------
+    unioned_meshes
+        Processed input meshes where intersecting meshes are unioned, and non intersecting meshes are returned
+        unchanged.
+
+    """
     intersection_sets = []
 
     # Iterate through all pairs and create sets of intersecting meshes
@@ -247,6 +320,23 @@ def union_any_intersecting(meshes: List[Tuple[np.ndarray, np.ndarray]]) -> List[
 
 
 def dif_any_intersecting(meshes: List[Tuple[np.ndarray, np.ndarray]]) -> List[Tuple[np.ndarray, np.ndarray]]:
+    """
+    Iterate through a list of input surfaces and perform a boolean difference on any that are intersercting.
+
+    Parameters
+    ----------
+    meshes
+        Input meshes represented as a Tuple of ndarray.
+            Tuple element 0: 3xN ndarray of float representing XYZ points in 3D space
+            Tuple element 1: 3xN ndarray of int representing triangular faces composed of indices the points
+
+    Returns
+    -------
+    diffed_meshes
+        Processed input meshes where intersecting meshes are diffed, and non intersecting meshes are returned
+        unchanged.
+
+    """
     intersection_list = []
     dif_pairs = []
 

@@ -1,0 +1,478 @@
+
+<!DOCTYPE html>
+
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>tetrahedralizer.mesh_lib.mesh_lib &#8212; Tetrahedralizer 0.0.1 documentation</title>
+    <link rel="stylesheet" type="text/css" href="../../../_static/pygments.css" />
+    <link rel="stylesheet" type="text/css" href="../../../_static/alabaster.css" />
+    <link rel="stylesheet" type="text/css" href="../../../_static/css/custom.css" />
+    <script data-url_root="../../../" id="documentation_options" src="../../../_static/documentation_options.js"></script>
+    <script src="../../../_static/jquery.js"></script>
+    <script src="../../../_static/underscore.js"></script>
+    <script src="../../../_static/doctools.js"></script>
+    <link rel="index" title="Index" href="../../../genindex.html" />
+    <link rel="search" title="Search" href="../../../search.html" />
+   
+  <link rel="stylesheet" href="../../../_static/custom.css" type="text/css" />
+  
+  
+  <meta name="viewport" content="width=device-width, initial-scale=0.9, maximum-scale=0.9" />
+
+  </head><body>
+  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          
+
+          <div class="body" role="main">
+            
+  <h1>Source code for tetrahedralizer.mesh_lib.mesh_lib</h1><div class="highlight"><pre>
+<span></span><span class="kn">import</span> <span class="nn">itertools</span>
+<span class="kn">from</span> <span class="nn">typing</span> <span class="kn">import</span> <span class="n">Dict</span><span class="p">,</span> <span class="n">Tuple</span><span class="p">,</span> <span class="n">List</span><span class="p">,</span> <span class="n">Optional</span>
+<span class="kn">import</span> <span class="nn">gmsh</span>
+<span class="kn">import</span> <span class="nn">numpy</span> <span class="k">as</span> <span class="nn">np</span>
+<span class="kn">import</span> <span class="nn">pymeshfix</span>
+<span class="kn">from</span> <span class="nn">pymeshlab.pmeshlab</span> <span class="kn">import</span> <span class="n">PyMeshLabException</span>
+<span class="kn">import</span> <span class="nn">pymeshlab</span>
+<span class="kn">import</span> <span class="nn">pyvista</span> <span class="k">as</span> <span class="nn">pv</span>
+<span class="kn">from</span> <span class="nn">tetrahedralizer</span> <span class="kn">import</span> <span class="n">pyvista_tools</span>
+<span class="kn">from</span> <span class="nn">tetrahedralizer.pyvista_tools</span> <span class="kn">import</span> <span class="n">pyvista_faces_to_2d</span><span class="p">,</span> <span class="n">pyvista_faces_to_1d</span><span class="p">,</span> <span class="n">remove_shared_faces</span>
+
+
+<div class="viewcode-block" id="fix_mesh"><a class="viewcode-back" href="../../../api.html#tetrahedralizer.mesh_lib.fix_mesh">[docs]</a><span class="k">def</span> <span class="nf">fix_mesh</span><span class="p">(</span><span class="n">mesh</span><span class="p">:</span> <span class="n">pv</span><span class="o">.</span><span class="n">DataSet</span><span class="p">,</span> <span class="n">repair_kwargs</span><span class="p">:</span> <span class="n">Dict</span> <span class="o">=</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="n">pv</span><span class="o">.</span><span class="n">DataSet</span><span class="p">,</span> <span class="n">pv</span><span class="o">.</span><span class="n">PolyData</span><span class="p">]:</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Call the meshfix.repair function on a Pyvista dataset and return a fixed copy of the dataset along with the meshfix</span>
+<span class="sd">    holes</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    mesh</span>
+<span class="sd">        Pyvista Dataset</span>
+<span class="sd">    repair_kwargs</span>
+<span class="sd">        Kwargs for meshfix.repair</span>
+
+<span class="sd">    Returns</span>
+<span class="sd">    -------</span>
+<span class="sd">        Fixed copy of the input mesh, holes identified by meshfix</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="k">if</span> <span class="n">repair_kwargs</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="n">repair_kwargs</span> <span class="o">=</span> <span class="p">{}</span>
+    <span class="n">meshfix</span> <span class="o">=</span> <span class="n">pymeshfix</span><span class="o">.</span><span class="n">MeshFix</span><span class="p">(</span><span class="n">mesh</span><span class="o">.</span><span class="n">points</span><span class="p">,</span> <span class="n">pyvista_faces_to_2d</span><span class="p">(</span><span class="n">mesh</span><span class="o">.</span><span class="n">faces</span><span class="p">))</span>
+    <span class="n">holes</span> <span class="o">=</span> <span class="n">meshfix</span><span class="o">.</span><span class="n">extract_holes</span><span class="p">()</span>
+    <span class="n">meshfix</span><span class="o">.</span><span class="n">repair</span><span class="p">(</span><span class="o">**</span><span class="n">repair_kwargs</span><span class="p">)</span>
+    <span class="n">fixed_mesh</span> <span class="o">=</span> <span class="n">mesh</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span>
+    <span class="n">fixed_mesh</span><span class="o">.</span><span class="n">points</span> <span class="o">=</span> <span class="n">meshfix</span><span class="o">.</span><span class="n">v</span>
+    <span class="n">fixed_mesh</span><span class="o">.</span><span class="n">faces</span> <span class="o">=</span> <span class="n">pyvista_faces_to_1d</span><span class="p">(</span><span class="n">meshfix</span><span class="o">.</span><span class="n">f</span><span class="p">)</span>
+
+    <span class="k">return</span> <span class="n">fixed_mesh</span><span class="p">,</span> <span class="n">holes</span></div>
+
+
+<span class="c1">#: Dict to map names to pymeshlab boolean operations</span>
+<span class="n">pymeshlab_op_map</span> <span class="o">=</span> <span class="p">{</span>
+    <span class="s2">&quot;Difference&quot;</span><span class="p">:</span> <span class="n">pymeshlab</span><span class="o">.</span><span class="n">MeshSet</span><span class="o">.</span><span class="n">generate_boolean_difference</span><span class="o">.</span><span class="vm">__name__</span><span class="p">,</span>
+    <span class="s2">&quot;Intersection&quot;</span><span class="p">:</span> <span class="n">pymeshlab</span><span class="o">.</span><span class="n">MeshSet</span><span class="o">.</span><span class="n">generate_boolean_intersection</span><span class="o">.</span><span class="vm">__name__</span><span class="p">,</span>
+    <span class="s2">&quot;Union&quot;</span><span class="p">:</span> <span class="n">pymeshlab</span><span class="o">.</span><span class="n">MeshSet</span><span class="o">.</span><span class="n">generate_boolean_union</span><span class="o">.</span><span class="vm">__name__</span><span class="p">,</span>
+    <span class="s2">&quot;Xor&quot;</span><span class="p">:</span> <span class="n">pymeshlab</span><span class="o">.</span><span class="n">MeshSet</span><span class="o">.</span><span class="n">generate_boolean_xor</span><span class="o">.</span><span class="vm">__name__</span>
+<span class="p">}</span>
+
+
+<div class="viewcode-block" id="pymeshlab_boolean"><a class="viewcode-back" href="../../../api.html#tetrahedralizer.mesh_lib.pymeshlab_boolean">[docs]</a><span class="k">def</span> <span class="nf">pymeshlab_boolean</span><span class="p">(</span><span class="n">meshes</span><span class="p">:</span> <span class="n">Tuple</span><span class="p">[</span><span class="n">Tuple</span><span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">],</span> <span class="n">Tuple</span><span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">]],</span> <span class="n">operation</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> \
+        <span class="o">-&gt;</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Tuple</span><span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">]]:</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Run a pymesh boolean operation on two input meshes. The meshes are described as a platform agnostic Tuple of ndarrays</span>
+<span class="sd">    representing mesh vertices and faces. The format is as follows:</span>
+<span class="sd">    Tuple element 0: 3xN ndarray of float representing XYZ points in 3D space</span>
+<span class="sd">    Tuple element 1: 3xN ndarray of int representing triangular faces composed of indices the points</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    meshes</span>
+<span class="sd">        Tuple of two input meshes in array format</span>
+<span class="sd">    operation</span>
+<span class="sd">        Pymeshlab boolean operation name. String names are mapped to pymeshlab functions in ppymeshlab_op_map</span>
+
+<span class="sd">    Returns</span>
+<span class="sd">    -------</span>
+<span class="sd">    booleaned_mesh</span>
+<span class="sd">        Result of the boolean operation in array format</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="n">ms</span> <span class="o">=</span> <span class="n">pymeshlab</span><span class="o">.</span><span class="n">MeshSet</span><span class="p">()</span>
+    <span class="k">for</span> <span class="n">mesh</span> <span class="ow">in</span> <span class="n">meshes</span><span class="p">:</span>
+        <span class="n">ml_mesh</span> <span class="o">=</span> <span class="n">pymeshlab</span><span class="o">.</span><span class="n">Mesh</span><span class="p">(</span><span class="n">mesh</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">mesh</span><span class="p">[</span><span class="mi">1</span><span class="p">])</span>
+        <span class="n">ms</span><span class="o">.</span><span class="n">add_mesh</span><span class="p">(</span><span class="n">ml_mesh</span><span class="p">)</span>
+
+    <span class="n">func</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">ms</span><span class="p">,</span> <span class="n">pymeshlab_op_map</span><span class="p">[</span><span class="n">operation</span><span class="p">])</span>
+    <span class="k">try</span><span class="p">:</span>
+        <span class="n">func</span><span class="p">(</span><span class="n">first_mesh</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">second_mesh</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
+    <span class="k">except</span> <span class="n">PyMeshLabException</span><span class="p">:</span>
+        <span class="k">return</span> <span class="kc">None</span>
+
+    <span class="n">booleaned_mesh</span> <span class="o">=</span> <span class="p">(</span><span class="n">ms</span><span class="o">.</span><span class="n">mesh</span><span class="p">(</span><span class="mi">2</span><span class="p">)</span><span class="o">.</span><span class="n">vertex_matrix</span><span class="p">(),</span> <span class="n">ms</span><span class="o">.</span><span class="n">mesh</span><span class="p">(</span><span class="mi">2</span><span class="p">)</span><span class="o">.</span><span class="n">face_matrix</span><span class="p">())</span>
+
+    <span class="k">return</span> <span class="n">booleaned_mesh</span></div>
+
+
+<span class="k">def</span> <span class="nf">gmsh_load_from_arrays</span><span class="p">(</span><span class="n">mesh_vertices</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span> <span class="n">mesh_elements</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span> <span class="n">dim</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">2</span><span class="p">,</span> <span class="n">msh_type</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">2</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Load a mesh into gmsh fram a set of vertex and face arrays. Gmsh must be initialized before using this function.</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    mesh_vertices</span>
+<span class="sd">        3xN ndarray of float representing XYZ points in 3D space</span>
+<span class="sd">    mesh_elements</span>
+<span class="sd">        3xN ndarray of int representing triangular faces composed of indices the points</span>
+<span class="sd">    dim</span>
+<span class="sd">        gmsh mesh dimension</span>
+<span class="sd">    msh_type</span>
+<span class="sd">        gmsh mesh type</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">mesh</span> <span class="o">=</span> <span class="p">(</span><span class="n">mesh_vertices</span><span class="p">,</span> <span class="n">mesh_elements</span><span class="p">)</span>
+    <span class="n">tag</span> <span class="o">=</span> <span class="n">gmsh</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">add_discrete_entity</span><span class="p">(</span><span class="n">dim</span><span class="p">)</span>
+
+    <span class="n">max_node</span> <span class="o">=</span> <span class="n">gmsh</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">mesh</span><span class="o">.</span><span class="n">getMaxNodeTag</span><span class="p">()</span>
+    <span class="n">node_tags</span> <span class="o">=</span> <span class="n">max_node</span> <span class="o">+</span> <span class="mi">1</span> <span class="o">+</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="nb">range</span><span class="p">(</span><span class="n">mesh</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]))</span>
+    <span class="n">gmsh</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">mesh</span><span class="o">.</span><span class="n">add_nodes</span><span class="p">(</span><span class="n">dim</span><span class="p">,</span> <span class="n">tag</span><span class="p">,</span> <span class="n">node_tags</span><span class="p">,</span> <span class="n">mesh</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">ravel</span><span class="p">())</span>
+
+    <span class="n">max_element</span> <span class="o">=</span> <span class="n">gmsh</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">mesh</span><span class="o">.</span><span class="n">getMaxElementTag</span><span class="p">()</span>
+    <span class="n">element_tags</span> <span class="o">=</span> <span class="n">max_element</span> <span class="o">+</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="nb">range</span><span class="p">(</span><span class="n">mesh</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]))</span>
+    <span class="n">element_node_tags</span> <span class="o">=</span> <span class="n">mesh</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">+</span> <span class="n">node_tags</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+    <span class="n">gmsh</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">mesh</span><span class="o">.</span><span class="n">add_elements</span><span class="p">(</span><span class="n">dim</span><span class="p">,</span> <span class="n">tag</span><span class="p">,</span> <span class="p">[</span><span class="n">msh_type</span><span class="p">],</span> <span class="p">[</span><span class="n">element_tags</span><span class="p">],</span> <span class="p">[</span><span class="n">element_node_tags</span><span class="o">.</span><span class="n">ravel</span><span class="p">()])</span>
+
+
+<span class="k">def</span> <span class="nf">gmsh_tetrahedral_mesh_to_arrays</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span> <span class="n">Tuple</span><span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">]]:</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Obtain an array representation of the tetrahedral mesh in gmsh, if it exists.</span>
+
+<span class="sd">    Returns</span>
+<span class="sd">    -------</span>
+<span class="sd">    nodes_array, (triangles, tets)</span>
+<span class="sd">        3xN array of points, (3xN array of triangular faces, 4xN array of tetrahedral cells)</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">_</span><span class="p">,</span> <span class="n">coord</span><span class="p">,</span> <span class="n">_</span> <span class="o">=</span> <span class="n">gmsh</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">mesh</span><span class="o">.</span><span class="n">getNodes</span><span class="p">()</span>
+    <span class="n">nodes_array</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">coord</span><span class="p">)</span><span class="o">.</span><span class="n">reshape</span><span class="p">(</span><span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="mi">3</span><span class="p">)</span>
+    <span class="n">element_types</span><span class="p">,</span> <span class="n">_</span><span class="p">,</span> <span class="n">node_tags</span> <span class="o">=</span> <span class="n">gmsh</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">mesh</span><span class="o">.</span><span class="n">getElements</span><span class="p">()</span>
+    <span class="n">node_tags</span> <span class="o">=</span> <span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">tag_set</span><span class="p">)</span> <span class="o">-</span> <span class="mi">1</span> <span class="k">for</span> <span class="n">tag_set</span> <span class="ow">in</span> <span class="n">node_tags</span><span class="p">]</span>
+    <span class="k">if</span> <span class="mi">2</span> <span class="ow">in</span> <span class="n">element_types</span><span class="p">:</span>
+        <span class="n">triangles</span> <span class="o">=</span> <span class="n">node_tags</span><span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">argmax</span><span class="p">(</span><span class="n">element_types</span> <span class="o">==</span> <span class="mi">2</span><span class="p">)]</span><span class="o">.</span><span class="n">reshape</span><span class="p">(</span><span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="mi">3</span><span class="p">)</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="n">NotFoundError</span><span class="p">(</span><span class="s2">&quot;Surface not found in gmsh&quot;</span><span class="p">)</span>
+    <span class="k">if</span> <span class="mi">4</span> <span class="ow">in</span> <span class="n">element_types</span><span class="p">:</span>
+        <span class="n">tets</span> <span class="o">=</span> <span class="n">node_tags</span><span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">argmax</span><span class="p">(</span><span class="n">element_types</span> <span class="o">==</span> <span class="mi">4</span><span class="p">)]</span><span class="o">.</span><span class="n">reshape</span><span class="p">(</span><span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="mi">4</span><span class="p">)</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="n">NotFoundError</span><span class="p">(</span><span class="s2">&quot;Tetrahedra not found in gmsh&quot;</span><span class="p">)</span>
+
+    <span class="k">return</span> <span class="n">nodes_array</span><span class="p">,</span> <span class="p">(</span><span class="n">triangles</span><span class="p">,</span> <span class="n">tets</span><span class="p">)</span>
+
+
+<span class="k">class</span> <span class="nc">NotFoundError</span><span class="p">(</span><span class="ne">Exception</span><span class="p">):</span>
+    <span class="k">pass</span>
+
+
+<div class="viewcode-block" id="gmsh_tetrahedralize"><a class="viewcode-back" href="../../../api.html#tetrahedralizer.mesh_lib.gmsh_tetrahedralize">[docs]</a><span class="k">def</span> <span class="nf">gmsh_tetrahedralize</span><span class="p">(</span><span class="n">meshes</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">Tuple</span><span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">]],</span> <span class="n">gmsh_options</span><span class="p">:</span> <span class="nb">dict</span><span class="p">)</span> \
+        <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span> <span class="n">Tuple</span><span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">]]:</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Run the gmsh tetrahedralization operation (mesh.generate(3)) on a group of surface meshes. Gmsh will interpret the</span>
+<span class="sd">    outermost mesh as the outer surface, and all other meshes as holes to generte in the tetrahedralization.</span>
+
+<span class="sd">    The meshes are described as a platform agnostic Tuple of ndarrays</span>
+<span class="sd">    representing mesh vertices and faces. The format is as follows:</span>
+<span class="sd">    Tuple element 0: 3xN ndarray of float representing XYZ points in 3D space</span>
+<span class="sd">    Tuple element 1: 3xN ndarray of int representing triangular faces composed of indices the points</span>
+
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    meshes</span>
+<span class="sd">        List of meshes to tetrahedralize</span>
+<span class="sd">    gmsh_options</span>
+<span class="sd">        Dict of values to be passed to gmsh.option.set_number</span>
+<span class="sd">    Returns</span>
+<span class="sd">    -------</span>
+<span class="sd">        Tetrahedralized mesh. Elements are now represented as a Tuple of ndarray. Element 0 is a 3xN array of surface</span>
+<span class="sd">        faces. Element 1 is a 4xN array of tetrahedral cells</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">gmsh</span><span class="o">.</span><span class="n">initialize</span><span class="p">()</span>
+    <span class="k">for</span> <span class="n">mesh</span> <span class="ow">in</span> <span class="n">meshes</span><span class="p">:</span>
+        <span class="n">gmsh_load_from_arrays</span><span class="p">(</span><span class="n">mesh</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">mesh</span><span class="p">[</span><span class="mi">1</span><span class="p">])</span>
+
+    <span class="c1"># Create a volume from all the surfaces</span>
+    <span class="n">s</span> <span class="o">=</span> <span class="n">gmsh</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">get_entities</span><span class="p">(</span><span class="mi">2</span><span class="p">)</span>
+    <span class="n">l</span> <span class="o">=</span> <span class="n">gmsh</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">geo</span><span class="o">.</span><span class="n">addSurfaceLoop</span><span class="p">([</span><span class="n">e</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="k">for</span> <span class="n">e</span> <span class="ow">in</span> <span class="n">s</span><span class="p">])</span>
+    <span class="n">gmsh</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">geo</span><span class="o">.</span><span class="n">addVolume</span><span class="p">([</span><span class="n">l</span><span class="p">])</span>
+
+    <span class="n">gmsh</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">geo</span><span class="o">.</span><span class="n">synchronize</span><span class="p">()</span>
+
+    <span class="k">for</span> <span class="n">name</span><span class="p">,</span> <span class="n">value</span> <span class="ow">in</span> <span class="n">gmsh_options</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+        <span class="n">gmsh</span><span class="o">.</span><span class="n">option</span><span class="o">.</span><span class="n">set_number</span><span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="n">value</span><span class="p">)</span>
+
+    <span class="n">gmsh</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">mesh</span><span class="o">.</span><span class="n">generate</span><span class="p">(</span><span class="mi">3</span><span class="p">)</span>
+
+    <span class="n">nodes</span><span class="p">,</span> <span class="n">elements</span> <span class="o">=</span> <span class="n">gmsh_tetrahedral_mesh_to_arrays</span><span class="p">()</span>
+    <span class="n">gmsh</span><span class="o">.</span><span class="n">finalize</span><span class="p">()</span>
+    <span class="k">return</span> <span class="n">nodes</span><span class="p">,</span> <span class="n">elements</span></div>
+
+
+<div class="viewcode-block" id="preprocess_and_tetrahedralize"><a class="viewcode-back" href="../../../api.html#tetrahedralizer.mesh_lib.preprocess_and_tetrahedralize">[docs]</a><span class="k">def</span> <span class="nf">preprocess_and_tetrahedralize</span><span class="p">(</span><span class="n">outer_mesh</span><span class="p">:</span> <span class="n">pv</span><span class="o">.</span><span class="n">DataSet</span><span class="p">,</span> <span class="n">inner_meshes</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">pv</span><span class="o">.</span><span class="n">DataSet</span><span class="p">],</span> <span class="n">mesh_repair_kwargs</span><span class="p">:</span> <span class="nb">dict</span><span class="p">,</span>
+                                  <span class="n">gmsh_options</span><span class="p">:</span> <span class="nb">dict</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">pv</span><span class="o">.</span><span class="n">UnstructuredGrid</span><span class="p">:</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Automatically create a tetrahedralization from multiple input surface meshes. The outer mesh represents the</span>
+<span class="sd">    outermost boundary of the output mesh, and the inner meshes represent the boundaries of individual inner sections</span>
+<span class="sd">    of the output mesh. The process is configurable with mesh_repair_kwargs and gmsh_options.</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    outer_mesh</span>
+<span class="sd">        Pyvista DataSet representing the outer surface</span>
+<span class="sd">    inner_meshes</span>
+<span class="sd">        List of Pyvista DataSets representing the surfaces of inner sections</span>
+<span class="sd">    mesh_repair_kwargs</span>
+<span class="sd">        Kwargs for PyMeshfix</span>
+<span class="sd">    gmsh_options</span>
+<span class="sd">        Kwargs for gmsh</span>
+
+<span class="sd">    Returns</span>
+<span class="sd">    -------</span>
+<span class="sd">    combined</span>
+<span class="sd">        Pyvista unstructured grid</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Fixing...&quot;</span><span class="p">)</span>
+    <span class="c1"># Fix all inputs</span>
+    <span class="n">fixed_meshes</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="k">for</span> <span class="n">mesh</span> <span class="ow">in</span> <span class="p">[</span><span class="n">outer_mesh</span><span class="p">,</span> <span class="o">*</span><span class="n">inner_meshes</span><span class="p">]:</span>
+        <span class="n">fixed_meshes</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">fix_mesh</span><span class="p">(</span><span class="n">mesh</span><span class="p">,</span> <span class="n">mesh_repair_kwargs</span><span class="p">)[</span><span class="mi">0</span><span class="p">])</span>
+
+    <span class="c1"># Convert to arrays for boolean process</span>
+    <span class="n">fixed_mesh_arrays</span> <span class="o">=</span> <span class="p">[(</span><span class="n">mesh</span><span class="o">.</span><span class="n">points</span><span class="p">,</span> <span class="n">pyvista_faces_to_2d</span><span class="p">(</span><span class="n">mesh</span><span class="o">.</span><span class="n">faces</span><span class="p">))</span> <span class="k">for</span> <span class="n">mesh</span> <span class="ow">in</span> <span class="n">fixed_meshes</span><span class="p">]</span>
+
+    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Booleaning...&quot;</span><span class="p">)</span>
+    <span class="c1"># Check all pairs of inner meshes for intersections and create:</span>
+    <span class="c1"># # List of meshes where intersecting sets are replaced with a union</span>
+    <span class="c1"># # List of meshes where intersecting pairs are replaced with a diffed and an original</span>
+    <span class="n">unioned_meshes</span> <span class="o">=</span> <span class="n">union_any_intersecting</span><span class="p">(</span><span class="n">fixed_mesh_arrays</span><span class="p">[</span><span class="mi">1</span><span class="p">:])</span>
+    <span class="n">diffed_meshes</span> <span class="o">=</span> <span class="n">dif_any_intersecting</span><span class="p">(</span><span class="n">fixed_mesh_arrays</span><span class="p">[</span><span class="mi">1</span><span class="p">:])</span>
+
+    <span class="c1"># Convert back to pyvista</span>
+    <span class="n">pv_unioned_meshes</span> <span class="o">=</span> <span class="p">[</span><span class="n">pv</span><span class="o">.</span><span class="n">PolyData</span><span class="p">(</span><span class="n">mesh</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">pyvista_faces_to_1d</span><span class="p">(</span><span class="n">mesh</span><span class="p">[</span><span class="mi">1</span><span class="p">]))</span> <span class="k">for</span> <span class="n">mesh</span> <span class="ow">in</span> <span class="n">unioned_meshes</span><span class="p">]</span>
+    <span class="n">pv_diffed_meshes</span> <span class="o">=</span> <span class="p">[</span><span class="n">pv</span><span class="o">.</span><span class="n">PolyData</span><span class="p">(</span><span class="n">mesh</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">pyvista_faces_to_1d</span><span class="p">(</span><span class="n">mesh</span><span class="p">[</span><span class="mi">1</span><span class="p">]))</span> <span class="k">for</span> <span class="n">mesh</span> <span class="ow">in</span> <span class="n">diffed_meshes</span><span class="p">]</span>
+
+    <span class="c1"># Fix booleaned meshes</span>
+    <span class="n">fixed_unioned</span> <span class="o">=</span> <span class="p">[</span><span class="n">fix_mesh</span><span class="p">(</span><span class="n">mesh</span><span class="p">,</span> <span class="n">mesh_repair_kwargs</span><span class="p">)[</span><span class="mi">0</span><span class="p">]</span> <span class="k">for</span> <span class="n">mesh</span> <span class="ow">in</span> <span class="n">pv_unioned_meshes</span><span class="p">]</span>
+    <span class="n">fixed_diffed</span> <span class="o">=</span> <span class="p">[</span><span class="n">fix_mesh</span><span class="p">(</span><span class="n">mesh</span><span class="p">,</span> <span class="n">mesh_repair_kwargs</span><span class="p">)[</span><span class="mi">0</span><span class="p">]</span> <span class="k">for</span> <span class="n">mesh</span> <span class="ow">in</span> <span class="n">pv_diffed_meshes</span><span class="p">]</span>
+
+    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Combining...&quot;</span><span class="p">)</span>
+    <span class="c1"># Remove shared faces to form inner hole</span>
+    <span class="n">combined_unioned</span> <span class="o">=</span> <span class="n">remove_shared_faces</span><span class="p">(</span><span class="n">fixed_unioned</span><span class="p">)</span>
+    <span class="n">fixed_combined</span> <span class="o">=</span> <span class="n">fix_mesh</span><span class="p">(</span><span class="n">combined_unioned</span><span class="p">)[</span><span class="mi">0</span><span class="p">]</span>
+    <span class="n">fixed_combined_arrays</span> <span class="o">=</span> <span class="p">(</span><span class="n">fixed_combined</span><span class="o">.</span><span class="n">points</span><span class="p">,</span> <span class="n">pyvista_faces_to_2d</span><span class="p">(</span><span class="n">fixed_combined</span><span class="o">.</span><span class="n">faces</span><span class="p">))</span>
+
+    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Tetrahedralizing...&quot;</span><span class="p">)</span>
+    <span class="c1"># Tetrahedralize outer mesh with hole, then convert to pyvista</span>
+    <span class="n">nodes</span><span class="p">,</span> <span class="n">elements</span> <span class="o">=</span> <span class="n">gmsh_tetrahedralize</span><span class="p">([</span><span class="n">fixed_mesh_arrays</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">fixed_combined_arrays</span><span class="p">],</span> <span class="n">gmsh_options</span><span class="p">)</span>
+    <span class="n">outer_tetrahedralized</span> <span class="o">=</span> <span class="n">pyvista_tools</span><span class="o">.</span><span class="n">pyvista_tetrahedral_mesh_from_arrays</span><span class="p">(</span><span class="n">nodes</span><span class="p">,</span> <span class="n">elements</span><span class="p">[</span><span class="mi">1</span><span class="p">])</span>
+
+    <span class="c1"># Tetrahedralize each inner mesh, then convert to pyvista</span>
+    <span class="n">inner_tetrahedralized</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="n">fixed_diffed_arrays</span> <span class="o">=</span> <span class="p">[(</span><span class="n">mesh</span><span class="o">.</span><span class="n">points</span><span class="p">,</span> <span class="n">pyvista_faces_to_2d</span><span class="p">(</span><span class="n">mesh</span><span class="o">.</span><span class="n">faces</span><span class="p">))</span> <span class="k">for</span> <span class="n">mesh</span> <span class="ow">in</span> <span class="n">fixed_diffed</span><span class="p">]</span>
+    <span class="k">for</span> <span class="n">mesh</span> <span class="ow">in</span> <span class="n">fixed_diffed_arrays</span><span class="p">:</span>
+        <span class="n">nodes</span><span class="p">,</span> <span class="n">elements</span> <span class="o">=</span> <span class="n">gmsh_tetrahedralize</span><span class="p">([</span><span class="n">mesh</span><span class="p">],</span> <span class="n">gmsh_options</span><span class="p">)</span>
+        <span class="n">inner_tetrahedralized</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
+            <span class="n">pyvista_tools</span><span class="o">.</span><span class="n">pyvista_tetrahedral_mesh_from_arrays</span><span class="p">(</span><span class="n">nodes</span><span class="p">,</span> <span class="n">elements</span><span class="p">[</span><span class="mi">1</span><span class="p">]))</span>
+
+    <span class="c1"># Combine result</span>
+    <span class="n">meshes</span> <span class="o">=</span> <span class="p">[</span><span class="n">outer_tetrahedralized</span><span class="p">,</span> <span class="o">*</span><span class="n">inner_tetrahedralized</span><span class="p">]</span>
+    <span class="k">for</span> <span class="n">i</span><span class="p">,</span> <span class="n">mesh</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">meshes</span><span class="p">):</span>
+        <span class="n">mesh</span><span class="o">.</span><span class="n">cell_data</span><span class="p">[</span><span class="s2">&quot;Scalar&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">([</span><span class="n">i</span> <span class="o">%</span> <span class="nb">len</span><span class="p">(</span><span class="n">meshes</span><span class="p">)]</span> <span class="o">*</span> <span class="n">mesh</span><span class="o">.</span><span class="n">n_cells</span><span class="p">)</span>
+    <span class="n">blocks</span> <span class="o">=</span> <span class="n">pv</span><span class="o">.</span><span class="n">MultiBlock</span><span class="p">(</span><span class="n">meshes</span><span class="p">)</span>
+    <span class="n">combined</span> <span class="o">=</span> <span class="n">blocks</span><span class="o">.</span><span class="n">combine</span><span class="p">()</span>
+
+    <span class="k">return</span> <span class="n">combined</span></div>
+
+
+<span class="k">def</span> <span class="nf">union_any_intersecting</span><span class="p">(</span><span class="n">meshes</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">Tuple</span><span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">]])</span> <span class="o">-&gt;</span> <span class="n">List</span><span class="p">[</span><span class="n">Tuple</span><span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">]]:</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Iterate through a list of surfaces and perform a boolean union on any that are intersecting.</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    meshes</span>
+<span class="sd">        Input meshes represented as a Tuple of ndarray.</span>
+<span class="sd">            Tuple element 0: 3xN ndarray of float representing XYZ points in 3D space</span>
+<span class="sd">            Tuple element 1: 3xN ndarray of int representing triangular faces composed of indices the points</span>
+
+<span class="sd">    Returns</span>
+<span class="sd">    -------</span>
+<span class="sd">    unioned_meshes</span>
+<span class="sd">        Processed input meshes where intersecting meshes are unioned, and non intersecting meshes are returned</span>
+<span class="sd">        unchanged.</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">intersection_sets</span> <span class="o">=</span> <span class="p">[]</span>
+
+    <span class="c1"># Iterate through all pairs and create sets of intersecting meshes</span>
+    <span class="k">for</span> <span class="p">(</span><span class="n">index_a</span><span class="p">,</span> <span class="n">mesh_a</span><span class="p">),</span> <span class="p">(</span><span class="n">index_b</span><span class="p">,</span> <span class="n">mesh_b</span><span class="p">)</span> <span class="ow">in</span> <span class="n">itertools</span><span class="o">.</span><span class="n">combinations</span><span class="p">(</span><span class="nb">enumerate</span><span class="p">(</span><span class="n">meshes</span><span class="p">),</span> <span class="mi">2</span><span class="p">):</span>
+        <span class="c1"># If they intersect</span>
+        <span class="k">if</span> <span class="n">pymeshlab_boolean</span><span class="p">((</span><span class="n">mesh_a</span><span class="p">,</span> <span class="n">mesh_b</span><span class="p">),</span> <span class="n">operation</span><span class="o">=</span><span class="s2">&quot;Intersection&quot;</span><span class="p">)</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="c1"># If a is already part of a set, add b to it</span>
+            <span class="k">if</span> <span class="n">np</span><span class="o">.</span><span class="n">any</span><span class="p">([</span><span class="n">index_a</span> <span class="ow">in</span> <span class="n">s</span> <span class="k">for</span> <span class="n">s</span> <span class="ow">in</span> <span class="n">intersection_sets</span><span class="p">]):</span>
+                <span class="n">intersection_sets</span><span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">argmax</span><span class="p">([</span><span class="n">index_a</span> <span class="ow">in</span> <span class="n">s</span> <span class="k">for</span> <span class="n">s</span> <span class="ow">in</span> <span class="n">intersection_sets</span><span class="p">])]</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">index_b</span><span class="p">)</span>
+            <span class="c1"># Else if b is already part of a set, add a to it</span>
+            <span class="k">elif</span> <span class="n">np</span><span class="o">.</span><span class="n">any</span><span class="p">([</span><span class="n">index_b</span> <span class="ow">in</span> <span class="n">s</span> <span class="k">for</span> <span class="n">s</span> <span class="ow">in</span> <span class="n">intersection_sets</span><span class="p">]):</span>
+                <span class="n">intersection_sets</span><span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">argmax</span><span class="p">([</span><span class="n">index_b</span> <span class="ow">in</span> <span class="n">s</span> <span class="k">for</span> <span class="n">s</span> <span class="ow">in</span> <span class="n">intersection_sets</span><span class="p">])]</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">index_a</span><span class="p">)</span>
+            <span class="c1"># Else make a new one with both</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">intersection_sets</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="nb">set</span><span class="p">([</span><span class="n">index_a</span><span class="p">,</span> <span class="n">index_b</span><span class="p">]))</span>
+
+    <span class="c1"># Cumulatively union all meshes in each set</span>
+    <span class="n">unioned_meshes</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="k">for</span> <span class="n">intersection_set</span> <span class="ow">in</span> <span class="n">intersection_sets</span><span class="p">:</span>
+        <span class="n">set_list</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">intersection_set</span><span class="p">)</span>
+        <span class="n">union_result</span> <span class="o">=</span> <span class="n">pymeshlab_boolean</span><span class="p">((</span><span class="n">meshes</span><span class="p">[</span><span class="n">set_list</span><span class="p">[</span><span class="mi">0</span><span class="p">]],</span> <span class="n">meshes</span><span class="p">[</span><span class="n">set_list</span><span class="p">[</span><span class="mi">1</span><span class="p">]]),</span> <span class="n">operation</span><span class="o">=</span><span class="s2">&quot;Union&quot;</span><span class="p">)</span>
+        <span class="k">for</span> <span class="n">index</span> <span class="ow">in</span> <span class="n">set_list</span><span class="p">[</span><span class="mi">2</span><span class="p">:]:</span>
+            <span class="n">union_result</span> <span class="o">=</span> <span class="n">pymeshlab_boolean</span><span class="p">((</span><span class="n">union_result</span><span class="p">,</span> <span class="n">meshes</span><span class="p">[</span><span class="n">index</span><span class="p">]),</span> <span class="n">operation</span><span class="o">=</span><span class="s2">&quot;Union&quot;</span><span class="p">)</span>
+        <span class="n">unioned_meshes</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">union_result</span><span class="p">)</span>
+
+    <span class="c1"># Put back in any that weren&#39;t unioned</span>
+    <span class="n">unioned_indices</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">itertools</span><span class="o">.</span><span class="n">chain</span><span class="p">(</span><span class="o">*</span><span class="n">intersection_sets</span><span class="p">))</span>
+    <span class="k">for</span> <span class="n">index</span><span class="p">,</span> <span class="n">mesh</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">meshes</span><span class="p">):</span>
+        <span class="k">if</span> <span class="n">index</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">unioned_indices</span><span class="p">:</span>
+            <span class="n">unioned_meshes</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">mesh</span><span class="p">)</span>
+
+    <span class="k">return</span> <span class="n">unioned_meshes</span>
+
+
+<span class="k">def</span> <span class="nf">dif_any_intersecting</span><span class="p">(</span><span class="n">meshes</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">Tuple</span><span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">]])</span> <span class="o">-&gt;</span> <span class="n">List</span><span class="p">[</span><span class="n">Tuple</span><span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">]]:</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Iterate through a list of input surfaces and perform a boolean difference on any that are intersercting.</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    meshes</span>
+<span class="sd">        Input meshes represented as a Tuple of ndarray.</span>
+<span class="sd">            Tuple element 0: 3xN ndarray of float representing XYZ points in 3D space</span>
+<span class="sd">            Tuple element 1: 3xN ndarray of int representing triangular faces composed of indices the points</span>
+
+<span class="sd">    Returns</span>
+<span class="sd">    -------</span>
+<span class="sd">    diffed_meshes</span>
+<span class="sd">        Processed input meshes where intersecting meshes are diffed, and non intersecting meshes are returned</span>
+<span class="sd">        unchanged.</span>
+
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">intersection_list</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="n">dif_pairs</span> <span class="o">=</span> <span class="p">[]</span>
+
+    <span class="c1"># Iterate through all pairs and create sets of intersecting meshes</span>
+    <span class="n">index_b</span><span class="p">:</span> <span class="nb">object</span>
+    <span class="k">for</span> <span class="p">(</span><span class="n">index_a</span><span class="p">,</span> <span class="n">mesh_a</span><span class="p">),</span> <span class="p">(</span><span class="n">index_b</span><span class="p">,</span> <span class="n">mesh_b</span><span class="p">)</span> <span class="ow">in</span> <span class="n">itertools</span><span class="o">.</span><span class="n">combinations</span><span class="p">(</span><span class="nb">enumerate</span><span class="p">(</span><span class="n">meshes</span><span class="p">),</span> <span class="mi">2</span><span class="p">):</span>
+        <span class="c1"># If they intersect</span>
+        <span class="k">if</span> <span class="n">pymeshlab_boolean</span><span class="p">((</span><span class="n">mesh_a</span><span class="p">,</span> <span class="n">mesh_b</span><span class="p">),</span> <span class="n">operation</span><span class="o">=</span><span class="s2">&quot;Intersection&quot;</span><span class="p">)</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="c1"># If we&#39;ve already seen a, add b dif a to dif pairs</span>
+            <span class="k">if</span> <span class="n">index_a</span> <span class="ow">in</span> <span class="n">intersection_list</span><span class="p">:</span>
+                <span class="n">intersection_list</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">index_b</span><span class="p">)</span>
+                <span class="n">dif_pairs</span><span class="o">.</span><span class="n">append</span><span class="p">((</span><span class="n">index_b</span><span class="p">,</span> <span class="n">index_a</span><span class="p">))</span>
+            <span class="c1"># Else if we&#39;ve already seen b, add a dif b to dif pairs</span>
+            <span class="k">elif</span> <span class="n">index_b</span> <span class="ow">in</span> <span class="n">intersection_list</span><span class="p">:</span>
+                <span class="n">intersection_list</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">index_a</span><span class="p">)</span>
+                <span class="n">dif_pairs</span><span class="o">.</span><span class="n">append</span><span class="p">((</span><span class="n">index_a</span><span class="p">,</span> <span class="n">index_b</span><span class="p">))</span>
+            <span class="c1"># Else we&#39;ve now seen both and add a dif b to dif pairs</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">intersection_list</span><span class="o">.</span><span class="n">extend</span><span class="p">([</span><span class="n">index_a</span><span class="p">,</span> <span class="n">index_b</span><span class="p">])</span>
+                <span class="n">dif_pairs</span><span class="o">.</span><span class="n">append</span><span class="p">((</span><span class="n">index_a</span><span class="p">,</span> <span class="n">index_b</span><span class="p">))</span>
+
+    <span class="c1"># Diff all the pairs</span>
+    <span class="n">diffed_meshes</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="k">for</span> <span class="n">pair</span> <span class="ow">in</span> <span class="n">dif_pairs</span><span class="p">:</span>
+        <span class="n">diffed_meshes</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">pymeshlab_boolean</span><span class="p">((</span><span class="n">meshes</span><span class="p">[</span><span class="n">pair</span><span class="p">[</span><span class="mi">0</span><span class="p">]],</span> <span class="n">meshes</span><span class="p">[</span><span class="n">pair</span><span class="p">[</span><span class="mi">1</span><span class="p">]]),</span> <span class="n">operation</span><span class="o">=</span><span class="s2">&quot;Difference&quot;</span><span class="p">))</span>
+
+    <span class="c1"># Put back in any that weren&#39;t diffed</span>
+    <span class="n">diffed_indices</span> <span class="o">=</span> <span class="p">[</span><span class="n">pair</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="k">for</span> <span class="n">pair</span> <span class="ow">in</span> <span class="n">dif_pairs</span><span class="p">]</span>
+    <span class="k">for</span> <span class="n">index</span><span class="p">,</span> <span class="n">mesh</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">meshes</span><span class="p">):</span>
+        <span class="k">if</span> <span class="n">index</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">diffed_indices</span><span class="p">:</span>
+            <span class="n">diffed_meshes</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">mesh</span><span class="p">)</span>
+
+    <span class="k">return</span> <span class="n">diffed_meshes</span>
+</pre></div>
+
+          </div>
+          
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+<h1 class="logo"><a href="../../../index.html">Tetrahedralizer</a></h1>
+
+
+
+
+
+
+
+
+<h3>Navigation</h3>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../index.html">Tetrahedralizer</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../installation.html">Installation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../usage.html">User Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../api.html">API Reference</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../contributing.html">Contributing</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../authors.html">Credits</a></li>
+</ul>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="../../../index.html">Documentation overview</a><ul>
+  <li><a href="../../index.html">Module code</a><ul>
+  </ul></li>
+  </ul></li>
+</ul>
+</div>
+<div id="searchbox" style="display: none" role="search">
+  <h3 id="searchlabel">Quick search</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="../../../search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"/>
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</div>
+<script>$('#searchbox').show(0);</script>
+
+
+
+
+
+
+
+
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &copy;2022, Andrew Creegan.
+      
+      |
+      Powered by <a href="http://sphinx-doc.org/">Sphinx 4.4.0</a>
+      &amp; <a href="https://github.com/bitprophet/alabaster">Alabaster 0.7.12</a>
+      
+    </div>
+
+    
+
+    
+  </body>
+</html>

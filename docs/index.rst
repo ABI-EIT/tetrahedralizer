@@ -4,5 +4,9 @@
 
    self
    installation
+   usage
+   api
+   contributing
+   authors
 
 .. include:: ../README.rst

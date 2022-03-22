@@ -1,0 +1,235 @@
+
+<!DOCTYPE html>
+
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="generator" content="Docutils 0.17.1: http://docutils.sourceforge.net/" />
+
+    <title>API Reference &#8212; Tetrahedralizer 0.0.1 documentation</title>
+    <link rel="stylesheet" type="text/css" href="_static/pygments.css" />
+    <link rel="stylesheet" type="text/css" href="_static/alabaster.css" />
+    <link rel="stylesheet" type="text/css" href="_static/css/custom.css" />
+    <script data-url_root="./" id="documentation_options" src="_static/documentation_options.js"></script>
+    <script src="_static/jquery.js"></script>
+    <script src="_static/underscore.js"></script>
+    <script src="_static/doctools.js"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="Contributing" href="contributing.html" />
+    <link rel="prev" title="User Guide" href="usage.html" />
+   
+  <link rel="stylesheet" href="_static/custom.css" type="text/css" />
+  
+  
+  <meta name="viewport" content="width=device-width, initial-scale=0.9, maximum-scale=0.9" />
+
+  </head><body>
+  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          
+
+          <div class="body" role="main">
+            
+  <section id="module-tetrahedralizer.mesh_lib">
+<span id="api-reference"></span><h1>API Reference<a class="headerlink" href="#module-tetrahedralizer.mesh_lib" title="Permalink to this headline">¶</a></h1>
+<dl class="py function">
+<dt class="sig sig-object py" id="tetrahedralizer.mesh_lib.fix_mesh">
+<span class="sig-prename descclassname"><span class="pre">tetrahedralizer.mesh_lib.</span></span><span class="sig-name descname"><span class="pre">fix_mesh</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">mesh</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">pyvista.core.dataset.DataSet</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">repair_kwargs</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Optional</span><span class="p"><span class="pre">[</span></span><span class="pre">Dict</span><span class="p"><span class="pre">]</span></span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">Tuple</span><span class="p"><span class="pre">[</span></span><span class="pre">pyvista.core.dataset.DataSet</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">pyvista.core.pointset.PolyData</span><span class="p"><span class="pre">]</span></span></span></span><a class="reference internal" href="_modules/tetrahedralizer/mesh_lib/mesh_lib.html#fix_mesh"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#tetrahedralizer.mesh_lib.fix_mesh" title="Permalink to this definition">¶</a></dt>
+<dd><p>Call the meshfix.repair function on a Pyvista dataset and return a fixed copy of the dataset along with the meshfix
+holes</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>mesh</strong> – Pyvista Dataset</p></li>
+<li><p><strong>repair_kwargs</strong> – Kwargs for meshfix.repair</p></li>
+</ul>
+</dd>
+<dt class="field-even">Return type</dt>
+<dd class="field-even"><p>Fixed copy of the input mesh, holes identified by meshfix</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="tetrahedralizer.mesh_lib.pymeshlab_boolean">
+<span class="sig-prename descclassname"><span class="pre">tetrahedralizer.mesh_lib.</span></span><span class="sig-name descname"><span class="pre">pymeshlab_boolean</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">meshes</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Tuple</span><span class="p"><span class="pre">[</span></span><span class="pre">Tuple</span><span class="p"><span class="pre">[</span></span><span class="pre">numpy.ndarray</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">numpy.ndarray</span><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">Tuple</span><span class="p"><span class="pre">[</span></span><span class="pre">numpy.ndarray</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">numpy.ndarray</span><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">]</span></span></span></em>, <em class="sig-param"><span class="n"><span class="pre">operation</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">Optional</span><span class="p"><span class="pre">[</span></span><span class="pre">Tuple</span><span class="p"><span class="pre">[</span></span><span class="pre">numpy.ndarray</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">numpy.ndarray</span><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">]</span></span></span></span><a class="reference internal" href="_modules/tetrahedralizer/mesh_lib/mesh_lib.html#pymeshlab_boolean"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#tetrahedralizer.mesh_lib.pymeshlab_boolean" title="Permalink to this definition">¶</a></dt>
+<dd><p>Run a pymesh boolean operation on two input meshes. The meshes are described as a platform agnostic Tuple of ndarrays
+representing mesh vertices and faces. The format is as follows:
+Tuple element 0: 3xN ndarray of float representing XYZ points in 3D space
+Tuple element 1: 3xN ndarray of int representing triangular faces composed of indices the points</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>meshes</strong> – Tuple of two input meshes in array format</p></li>
+<li><p><strong>operation</strong> – Pymeshlab boolean operation name. String names are mapped to pymeshlab functions in ppymeshlab_op_map</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p>Result of the boolean operation in array format</p>
+</dd>
+<dt class="field-odd">Return type</dt>
+<dd class="field-odd"><p>booleaned_mesh</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="tetrahedralizer.mesh_lib.gmsh_tetrahedralize">
+<span class="sig-prename descclassname"><span class="pre">tetrahedralizer.mesh_lib.</span></span><span class="sig-name descname"><span class="pre">gmsh_tetrahedralize</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">meshes</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">List</span><span class="p"><span class="pre">[</span></span><span class="pre">Tuple</span><span class="p"><span class="pre">[</span></span><span class="pre">numpy.ndarray</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">numpy.ndarray</span><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">]</span></span></span></em>, <em class="sig-param"><span class="n"><span class="pre">gmsh_options</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">dict</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">Tuple</span><span class="p"><span class="pre">[</span></span><span class="pre">numpy.ndarray</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">Tuple</span><span class="p"><span class="pre">[</span></span><span class="pre">numpy.ndarray</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">numpy.ndarray</span><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">]</span></span></span></span><a class="reference internal" href="_modules/tetrahedralizer/mesh_lib/mesh_lib.html#gmsh_tetrahedralize"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#tetrahedralizer.mesh_lib.gmsh_tetrahedralize" title="Permalink to this definition">¶</a></dt>
+<dd><p>Run the gmsh tetrahedralization operation (mesh.generate(3)) on a group of surface meshes. Gmsh will interpret the
+outermost mesh as the outer surface, and all other meshes as holes to generte in the tetrahedralization.</p>
+<p>The meshes are described as a platform agnostic Tuple of ndarrays
+representing mesh vertices and faces. The format is as follows:
+Tuple element 0: 3xN ndarray of float representing XYZ points in 3D space
+Tuple element 1: 3xN ndarray of int representing triangular faces composed of indices the points</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>meshes</strong> – List of meshes to tetrahedralize</p></li>
+<li><p><strong>gmsh_options</strong> – Dict of values to be passed to gmsh.option.set_number</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p><ul class="simple">
+<li><p><em>Tetrahedralized mesh. Elements are now represented as a Tuple of ndarray. Element 0 is a 3xN array of surface</em></p></li>
+<li><p><em>faces. Element 1 is a 4xN array of tetrahedral cells</em></p></li>
+</ul>
+</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="tetrahedralizer.mesh_lib.preprocess_and_tetrahedralize">
+<span class="sig-prename descclassname"><span class="pre">tetrahedralizer.mesh_lib.</span></span><span class="sig-name descname"><span class="pre">preprocess_and_tetrahedralize</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">outer_mesh</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">pyvista.core.dataset.DataSet</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">inner_meshes</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">List</span><span class="p"><span class="pre">[</span></span><span class="pre">pyvista.core.dataset.DataSet</span><span class="p"><span class="pre">]</span></span></span></em>, <em class="sig-param"><span class="n"><span class="pre">mesh_repair_kwargs</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">dict</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">gmsh_options</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">dict</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">pyvista.core.pointset.UnstructuredGrid</span></span></span><a class="reference internal" href="_modules/tetrahedralizer/mesh_lib/mesh_lib.html#preprocess_and_tetrahedralize"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#tetrahedralizer.mesh_lib.preprocess_and_tetrahedralize" title="Permalink to this definition">¶</a></dt>
+<dd><p>Automatically create a tetrahedralization from multiple input surface meshes. The outer mesh represents the
+outermost boundary of the output mesh, and the inner meshes represent the boundaries of individual inner sections
+of the output mesh. The process is configurable with mesh_repair_kwargs and gmsh_options.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>outer_mesh</strong> – Pyvista DataSet representing the outer surface</p></li>
+<li><p><strong>inner_meshes</strong> – List of Pyvista DataSets representing the surfaces of inner sections</p></li>
+<li><p><strong>mesh_repair_kwargs</strong> – Kwargs for PyMeshfix</p></li>
+<li><p><strong>gmsh_options</strong> – Kwargs for gmsh</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p>Pyvista unstructured grid</p>
+</dd>
+<dt class="field-odd">Return type</dt>
+<dd class="field-odd"><p>combined</p>
+</dd>
+</dl>
+</dd></dl>
+
+<span class="target" id="module-tetrahedralizer.pyvista_tools"></span><dl class="py function">
+<dt class="sig sig-object py" id="tetrahedralizer.pyvista_tools.remove_shared_faces">
+<span class="sig-prename descclassname"><span class="pre">tetrahedralizer.pyvista_tools.</span></span><span class="sig-name descname"><span class="pre">remove_shared_faces</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">meshes</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">List</span><span class="p"><span class="pre">[</span></span><span class="pre">pyvista.core.dataset.DataSet</span><span class="p"><span class="pre">]</span></span></span></em>, <em class="sig-param"><span class="n"><span class="pre">tolerance</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Optional</span><span class="p"><span class="pre">[</span></span><span class="pre">float</span><span class="p"><span class="pre">]</span></span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">return_removed_points</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">merge_result</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">Union</span><span class="p"><span class="pre">[</span></span><span class="pre">pyvista.core.pointset.PolyData</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">list</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">Tuple</span><span class="p"><span class="pre">[</span></span><span class="pre">Union</span><span class="p"><span class="pre">[</span></span><span class="pre">pyvista.core.pointset.PolyData</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">list</span><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">list</span><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">]</span></span></span></span><a class="reference internal" href="_modules/tetrahedralizer/pyvista_tools/pyvista_tools.html#remove_shared_faces"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#tetrahedralizer.pyvista_tools.remove_shared_faces" title="Permalink to this definition">¶</a></dt>
+<dd><p>Remove faces shared by any two of a list of Pyvista Polydata and merge the result. This is similar to the Pyvista
+boolean union, but works with intersections of zero volume. The meshes can optionally be returned unmerged. The
+removed points can also optionally be returned.</p>
+<p>Todo: Use remove cells, and return removed cells.
+Todo: Use Polydata.merge and return Polydata (Which can be saved as stl)</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>meshes</strong> – List of meshes to merge</p></li>
+<li><p><strong>tolerance</strong> – Tolerance for selecting shared points</p></li>
+<li><p><strong>merge_result</strong> – If true, returns meshes merged. Otherwise returns as a list. Default True</p></li>
+<li><p><strong>return_removed_points</strong> – If true, returns a list of points that were removed. (Points are returned not faces since Pyvista rebuilds
+meshes by removing points not faces. The points that are removed are those that were exclusively used by the
+shared faces.)</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p><ul class="simple">
+<li><p><em>Unstructured grid representing the combination of the input meshes, with shared walls removed. Alternatively,</em></p></li>
+<li><p><em>a copy of the input list of meshes with shared walls removed.</em></p></li>
+<li><p><em>Optionally, list of points that were removed.</em></p></li>
+</ul>
+</p>
+</dd>
+</dl>
+</dd></dl>
+
+</section>
+
+
+          </div>
+          
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+<h1 class="logo"><a href="index.html">Tetrahedralizer</a></h1>
+
+
+
+
+
+
+
+
+<h3>Navigation</h3>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="index.html">Tetrahedralizer</a></li>
+<li class="toctree-l1"><a class="reference internal" href="installation.html">Installation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="usage.html">User Guide</a></li>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">API Reference</a></li>
+<li class="toctree-l1"><a class="reference internal" href="contributing.html">Contributing</a></li>
+<li class="toctree-l1"><a class="reference internal" href="authors.html">Credits</a></li>
+</ul>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="index.html">Documentation overview</a><ul>
+      <li>Previous: <a href="usage.html" title="previous chapter">User Guide</a></li>
+      <li>Next: <a href="contributing.html" title="next chapter">Contributing</a></li>
+  </ul></li>
+</ul>
+</div>
+<div id="searchbox" style="display: none" role="search">
+  <h3 id="searchlabel">Quick search</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"/>
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</div>
+<script>$('#searchbox').show(0);</script>
+
+
+
+
+
+
+
+
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &copy;2022, Andrew Creegan.
+      
+      |
+      Powered by <a href="http://sphinx-doc.org/">Sphinx 4.4.0</a>
+      &amp; <a href="https://github.com/bitprophet/alabaster">Alabaster 0.7.12</a>
+      
+      |
+      <a href="_sources/api.rst.txt"
+          rel="nofollow">Page source</a>
+    </div>
+
+    
+
+    
+  </body>
+</html>
