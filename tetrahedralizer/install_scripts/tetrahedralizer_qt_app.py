@@ -20,11 +20,11 @@ def install():
     if os.path.exists(distpath):
         shutil.rmtree(distpath)
 
-    # Todo: semicolons don't work on linux
+    sep = os.pathsep
     PyInstaller.__main__.run([
         package_dir + r"\app\tetrahedralizer_qt_app\tetrahedralizer_qt.py",
-        "--add-data=" + package_dir + r"\app\tetrahedralizer_qt_app\layout\tetrahedralizer_layout.ui;layout",
-        "--add-data=" + package_dir + r"\app\tetrahedralizer_qt_app\conf.json;.",
+        "--add-data=" + package_dir + r"\app\tetrahedralizer_qt_app\layout\tetrahedralizer_layout.ui" + sep + "layout",
+        "--add-data=" + package_dir + r"\app\tetrahedralizer_qt_app\conf.json" + sep + ".",
         "--hidden-import=vtkmodules",
         "--hidden-import=vtkmodules.vtkFiltersGeneral",
         "--collect-all=pymeshlab",
@@ -38,10 +38,14 @@ def install():
     # Move conf.json up one level to get it out of the mess (as matched in tetrahedralizer_qt.py)
     shutil.move(distpath + r"\tetrahedralizer_qt\conf.json", distpath)
 
+    # Get the example meshes
+    shutil.copytree(package_dir + r"\app\example_meshes", distpath + r"\example_meshes")
+    os.remove(distpath + r"\example_meshes\__init__.py")
+
     # Create a shortcut to the pyinstaller exe and place it one level up
-    s = make_shortcut(" ", name="tetrahedralizer_qt", terminal=False, startmenu=False,
+    short = make_shortcut(" ", name="tetrahedralizer_qt", terminal=False, startmenu=False,
                       executable=distpath + r"\tetrahedralizer_qt\tetrahedralizer_qt.exe")
-    shutil.move(Path(s.desktop_dir + "\\" + s.target), distpath)
+    shutil.move(Path(short.desktop_dir + "\\" + short.target), distpath)
 
     # Get rid of pyinstaller working files
     shutil.rmtree(workpath)
