@@ -84,6 +84,9 @@ sections of the output mesh. The process is as follows:
 
 Mesh fixing with PyMeshfix
 **************************
+The fix_mesh function provides a simple interface to the pymeshfix Meshfix.repair function. It operates on a Pyvista
+dataset and accepts kwargs for Meshfix.repair. The images below show a mesh before and after fixing, with patched
+holes outlined in red.
 
 |not_fixed| |fixed|
 
@@ -96,6 +99,10 @@ Mesh fixing with PyMeshfix
 
 Removal of shared mesh faces
 ****************************
+remove_shared_faces can be used to merge two meshes that share walls but have no intersection. This is necessary
+when using such meshes to define a hole in an outer mesh for the purposes of tetrahedralization in gmsh. The images
+below show an example of five meshes representing the five lobes of the lungs, which each share a wall. Removed faces
+are shown in red in the image to the right.
 
 |input| |shared_removed|
 
@@ -107,12 +114,19 @@ Removal of shared mesh faces
 
 Boolean operations with PyMeshlab
 *********************************
+The pymeshlab_boolean function provides an interface to the boolean mesh operations in pymeshlab. Differenc, Intersection,
+Union, and Xor are available. This operates on a platform independent mesh representation in the form of arrays. The
+image below shows the boolean union between two slightly intersecting meshes.
 
 .. image:: _static/union_result.png
     :width: 45%
 
 Tetrahedralization with gmsh
 ****************************
+The gmsh_tetrahedralize function provides an interfaces to the gmsh package for mesh tetrahedralization. Options for
+tetrahedralization can be passed through the gmsh_options dict. The images below show a torso tetrahedralized with holes
+where lungs can be inserted (left) and a combined tetrahedral mesh where the torso had been combined with individual
+tetrahedralizations of the lung lobes.
 
 |holes| |all_lobes|
 

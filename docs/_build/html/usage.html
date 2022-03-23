@@ -110,18 +110,32 @@ individually</p>
 </section>
 <section id="mesh-fixing-with-pymeshfix">
 <h3>Mesh fixing with PyMeshfix<a class="headerlink" href="#mesh-fixing-with-pymeshfix" title="Permalink to this headline">¶</a></h3>
+<p>The fix_mesh function provides a simple interface to the pymeshfix Meshfix.repair function. It operates on a Pyvista
+dataset and accepts kwargs for Meshfix.repair. The images below show a mesh before and after fixing, with patched
+holes outlined in red.</p>
 <p><a class="reference internal" href="_images/torso_not_fixed.png"><img alt="not_fixed" src="_images/torso_not_fixed.png" style="width: 45%;" /></a> <a class="reference internal" href="_images/torso_fixed.png"><img alt="fixed" src="_images/torso_fixed.png" style="width: 45%;" /></a></p>
 </section>
 <section id="removal-of-shared-mesh-faces">
 <h3>Removal of shared mesh faces<a class="headerlink" href="#removal-of-shared-mesh-faces" title="Permalink to this headline">¶</a></h3>
+<p>remove_shared_faces can be used to merge two meshes that share walls but have no intersection. This is necessary
+when using such meshes to define a hole in an outer mesh for the purposes of tetrahedralization in gmsh. The images
+below show an example of five meshes representing the five lobes of the lungs, which each share a wall. Removed faces
+are shown in red in the image to the right.</p>
 <p><a class="reference internal" href="_images/All_lobes_input.png"><img alt="input" src="_images/All_lobes_input.png" style="width: 45%;" /></a> <a class="reference internal" href="_images/All_lobes_shared_faces_removed.png"><img alt="shared_removed" src="_images/All_lobes_shared_faces_removed.png" style="width: 45%;" /></a></p>
 </section>
 <section id="boolean-operations-with-pymeshlab">
 <h3>Boolean operations with PyMeshlab<a class="headerlink" href="#boolean-operations-with-pymeshlab" title="Permalink to this headline">¶</a></h3>
+<p>The pymeshlab_boolean function provides an interface to the boolean mesh operations in pymeshlab. Differenc, Intersection,
+Union, and Xor are available. This operates on a platform independent mesh representation in the form of arrays. The
+image below shows the boolean union between two slightly intersecting meshes.</p>
 <a class="reference internal image-reference" href="_images/union_result.png"><img alt="_images/union_result.png" src="_images/union_result.png" style="width: 45%;" /></a>
 </section>
 <section id="tetrahedralization-with-gmsh">
 <h3>Tetrahedralization with gmsh<a class="headerlink" href="#tetrahedralization-with-gmsh" title="Permalink to this headline">¶</a></h3>
+<p>The gmsh_tetrahedralize function provides an interfaces to the gmsh package for mesh tetrahedralization. Options for
+tetrahedralization can be passed through the gmsh_options dict. The images below show a torso tetrahedralized with holes
+where lungs can be inserted (left) and a combined tetrahedral mesh where the torso had been combined with individual
+tetrahedralizations of the lung lobes.</p>
 <p><a class="reference internal" href="_images/Tetrahedralized_with_holes.png"><img alt="holes" src="_images/Tetrahedralized_with_holes.png" style="width: 45%;" /></a> <a class="reference internal" href="_images/Torso_with_all_lobes_tetrahedralized_2.png"><img alt="all_lobes" src="_images/Torso_with_all_lobes_tetrahedralized_2.png" style="width: 45%;" /></a></p>
 </section>
 </section>
