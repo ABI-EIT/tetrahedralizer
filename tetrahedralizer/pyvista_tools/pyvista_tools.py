@@ -9,6 +9,11 @@ import pyvista as pv
 from pyvista import UnstructuredGrid
 
 
+# def remove_shared_faces_with_ray_trace(meshes: List[pv.DataSet], tolerance: float = None,
+#                         return_removed_faces: bool = False, merge_result=True) -> Union[
+#     Union[pv.PolyData, list], Tuple[Union[pv.PolyData, list], list]]:
+
+
 def remove_shared_faces(meshes: List[pv.DataSet], tolerance: float = None,
                         return_removed_faces: bool = False, merge_result=True) -> Union[
         List[pv.PolyData], Tuple[List[pv.PolyData], list]]:
