@@ -241,12 +241,12 @@ def preprocess_and_tetrahedralize(outer_mesh: pv.DataSet, inner_meshes: List[pv.
     print("Combining...")
     # Remove shared faces to form inner hole
     combined_unioned = remove_shared_faces(fixed_unioned)
-    fixed_combined = fix_mesh(combined_unioned)[0]
-    fixed_combined_arrays = (fixed_combined.points, pyvista_faces_to_2d(fixed_combined.faces))
+    fixed_combined = [fix_mesh(mesh)[0] for mesh in combined_unioned]
+    fixed_combined_arrays = [(mesh.points, pyvista_faces_to_2d(mesh.faces)) for mesh in fixed_combined]
 
     print("Tetrahedralizing...")
     # Tetrahedralize outer mesh with hole, then convert to pyvista
-    nodes, elements = gmsh_tetrahedralize([fixed_mesh_arrays[0], fixed_combined_arrays], gmsh_options)
+    nodes, elements = gmsh_tetrahedralize([fixed_mesh_arrays[0], *fixed_combined_arrays], gmsh_options)
     outer_tetrahedralized = pyvista_tools.pyvista_tetrahedral_mesh_from_arrays(nodes, elements[1])
 
     # Tetrahedralize each inner mesh, then convert to pyvista

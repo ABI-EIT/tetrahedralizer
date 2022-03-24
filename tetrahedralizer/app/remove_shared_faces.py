@@ -35,7 +35,10 @@ def main():
     meshes = [pv.PolyData(pv.read(filename)) for filename in filenames]
 
     # Combine lobes
-    combined, removed_points = remove_shared_faces(meshes, return_removed_points=True)
+    trimmed_meshes, removed_faces = remove_shared_faces(meshes, return_removed_faces=True)
+    combined = pv.PolyData()
+    for mesh in trimmed_meshes:
+        combined = combined.merge(mesh)
 
     # Save result
     if not os.path.exists(output_directory):
@@ -62,9 +65,8 @@ def main():
 
     # Create polydata of removed faces
     shared_faces_meshes = []
-    for mesh, points in zip(meshes, removed_points):
-        shared_faces_indices = select_faces_using_points(mesh, points)
-        shared_faces = pyvista_faces_to_1d(pyvista_faces_to_2d(mesh.faces)[shared_faces_indices])
+    for mesh, faces in zip(meshes, removed_faces):
+        shared_faces = pyvista_faces_to_1d(pyvista_faces_to_2d(mesh.faces)[faces])
         shared_faces_meshes.append(pv.PolyData(mesh.points, faces=shared_faces))
 
     # Plot removed faces
