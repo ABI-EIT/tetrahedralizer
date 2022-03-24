@@ -8,7 +8,7 @@ from tkinter.filedialog import askopenfilenames
 from matplotlib import cm
 
 from tetrahedralizer.pyvista_tools import remove_shared_faces, pyvista_faces_to_2d, pyvista_faces_to_1d, \
-    select_faces_using_points
+    select_faces_using_points, remove_shared_faces_with_ray_trace
 
 """
 App to combine meshes by removing their shared walls. Designed to be used with surface meshes representing the lobes of
@@ -17,6 +17,9 @@ of the individual lobe. This is because our tetrahedralization approach is a two
 torso, leaving a hole for the lungs. Second, fill the hole with the lung lobes. In the first step therefore, we need a 
 combined surface of the entire lung.
 """
+
+ray_length = 0.1
+incidence_angle_tolerance = 0.1  # Total range in radians
 
 
 def main():
@@ -35,7 +38,10 @@ def main():
     meshes = [pv.PolyData(pv.read(filename)) for filename in filenames]
 
     # Combine lobes
-    trimmed_meshes, removed_faces = remove_shared_faces(meshes, return_removed_faces=True)
+    trimmed_meshes, removed_faces = \
+        remove_shared_faces_with_ray_trace(meshes, ray_length=ray_length,
+                                           incidence_angle_tolerance=incidence_angle_tolerance,
+                                           return_removed_faces=True)
     combined = pv.PolyData()
     for mesh in trimmed_meshes:
         combined = combined.merge(mesh)
@@ -82,5 +88,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
-

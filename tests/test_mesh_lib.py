@@ -138,7 +138,6 @@ def test_preprocess_and_tetrahedralize_simple():
 
     tet = preprocess_and_tetrahedralize(outer, [inner_a, inner_b], {}, {})
 
-    # assert False  # Todo: check that we get two holes (should be the same as tet_gmsh_tetrahedralize)
     # Plot result
     # p = pv.Plotter()
     # p.add_mesh(tet, opacity=0.15,  show_edges=True, edge_color="gray")

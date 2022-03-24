@@ -7,7 +7,8 @@ from pymeshlab.pmeshlab import PyMeshLabException
 import pymeshlab
 import pyvista as pv
 from tetrahedralizer import pyvista_tools
-from tetrahedralizer.pyvista_tools import pyvista_faces_to_2d, pyvista_faces_to_1d, remove_shared_faces
+from tetrahedralizer.pyvista_tools import pyvista_faces_to_2d, pyvista_faces_to_1d, remove_shared_faces_with_ray_trace,\
+    remove_shared_faces
 
 
 def fix_mesh(mesh: pv.DataSet, repair_kwargs: Dict = None) -> Tuple[pv.DataSet, pv.PolyData]:
@@ -240,7 +241,7 @@ def preprocess_and_tetrahedralize(outer_mesh: pv.DataSet, inner_meshes: List[pv.
 
     print("Combining...")
     # Remove shared faces to form inner hole
-    combined_unioned = remove_shared_faces(fixed_unioned)
+    combined_unioned = remove_shared_faces_with_ray_trace(fixed_unioned)
     fixed_combined = [fix_mesh(mesh)[0] for mesh in combined_unioned]
     fixed_combined_arrays = [(mesh.points, pyvista_faces_to_2d(mesh.faces)) for mesh in fixed_combined]
 
