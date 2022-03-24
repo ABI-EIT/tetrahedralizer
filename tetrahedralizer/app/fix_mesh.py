@@ -6,6 +6,8 @@ import os
 
 from tetrahedralizer.mesh_lib import fix_mesh
 
+from tetrahedralizer.pyvista_tools import remove_shared_faces
+
 """
 App to apply meshfix to mesh and save
 """
@@ -38,10 +40,13 @@ def main():
     fixed_mesh.save(f"{output_directory}/{path.stem}_{output_suffix}{output_extension}")
 
     # Plot
+    difference = remove_shared_faces([mesh, fixed_mesh])
     p = pv.Plotter()
-    p.add_mesh(fixed_mesh.extract_all_edges())
+    p.add_mesh(difference[0].extract_all_edges(), label="Removed Faces")
+    p.add_mesh(fixed_mesh.extract_all_edges(), color="black", label="Fixed Mesh")
     if holes.number_of_points != 0:
-        p.add_mesh(holes, color="r")
+        p.add_mesh(holes, color="r", label="Holes", line_width=3)
+    p.add_legend()
     p.show()
 
 
