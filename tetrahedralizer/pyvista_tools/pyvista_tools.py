@@ -10,15 +10,12 @@ from pyvista import UnstructuredGrid
 
 
 def remove_shared_faces(meshes: List[pv.DataSet], tolerance: float = None,
-                        return_removed_points: bool = False, merge_result=True) -> Union[
-    Union[pv.PolyData, list], Tuple[Union[pv.PolyData, list], list]]:
+                        return_removed_faces: bool = False, merge_result=True) -> Union[
+        List[pv.PolyData], Tuple[List[pv.PolyData], list]]:
     """
     Remove faces shared by any two of a list of Pyvista Polydata and merge the result. This is similar to the Pyvista
     boolean union, but works with intersections of zero volume. The meshes can optionally be returned unmerged. The
-    removed points can also optionally be returned.
-
-    Todo: Use remove cells, and return removed cells.
-    Todo: Use Polydata.merge and return Polydata (Which can be saved as stl)
+    removed faces can also optionally be returned.
 
     Parameters
     ----------
@@ -27,22 +24,22 @@ def remove_shared_faces(meshes: List[pv.DataSet], tolerance: float = None,
     tolerance
         Tolerance for selecting shared points
     merge_result
-        If true, returns meshes merged. Otherwise returns as a list. Default True
-    return_removed_points
-        If true, returns a list of points that were removed. (Points are returned not faces since Pyvista rebuilds
-        meshes by removing points not faces. The points that are removed are those that were exclusively used by the
-        shared faces.)
+        If true, returns a list with intersecting meshes merged. Otherwise returns a list of each input individually.
+        Default True
+    return_removed_faces
+        If true, returns a list of faces that were removed.
 
     Returns
     -------
-    Unstructured grid representing the combination of the input meshes, with shared walls removed. Alternatively,
-    a copy of the input list of meshes with shared walls removed.
+    List of pv.Polydata with each set of intersecting input meshes merged into one. Input meshes that don't intersect
+    any other are returned unchanged. Alternatively, a list of non-merged input meshes with shared faces removed.
 
-    Optionally, list of points that were removed.
+    Optionally, list of faces that were removed.
 
     """
     # For each pair:
-    points_to_remove = [[] for _ in range(len(meshes))]
+    faces_to_remove = [[] for _ in range(len(meshes))]
+    intersection_sets = []
     for (index_a, mesh_a), (index_b, mesh_b) in itertools.combinations(enumerate(meshes), 2):
         shared_points_kwargs = {"mesh_a": mesh_a, "mesh_b": mesh_b, "tolerance": tolerance}
         shared_points_a, shared_points_b = select_shared_points(**{k: v for k, v in shared_points_kwargs.items() if v is not None})
@@ -50,31 +47,52 @@ def remove_shared_faces(meshes: List[pv.DataSet], tolerance: float = None,
         mesh_a_faces = select_faces_using_points(mesh_a, shared_points_a)
         mesh_b_faces = select_faces_using_points(mesh_b, shared_points_b)
 
-        to_delete_mesh_a = select_points_in_faces(mesh_a, shared_points_a, mesh_a_faces, exclusive=True)
-        to_delete_mesh_b = select_points_in_faces(mesh_b, shared_points_b, mesh_b_faces, exclusive=True)
+        faces_to_remove[index_a].extend(np.array(mesh_a_faces))
+        faces_to_remove[index_b].extend(np.array(mesh_b_faces))
 
-        points_to_remove[index_a].extend(np.array(to_delete_mesh_a))
-        points_to_remove[index_b].extend(np.array(to_delete_mesh_b))
+        # If mesh_a and mesh_b intersect, we need to record this so we can merge them later
+        if (mesh_a_faces, mesh_b_faces) != ([], []):
+            # If a is already part of a set, add b to it
+            if np.any([index_a in s for s in intersection_sets]):
+                intersection_sets[np.argmax([index_a in s for s in intersection_sets])].add(index_b)
+            # Else if b is already part of a set, add a to it
+            elif np.any([index_b in s for s in intersection_sets]):
+                intersection_sets[np.argmax([index_b in s for s in intersection_sets])].add(index_a)
+            # Else make a new one with both
+            else:
+                intersection_sets.append(set([index_a, index_b]))
 
     trimmed_meshes = []
     for i, mesh in enumerate(meshes):
-        if len(points_to_remove[i]) > 0:
-            trimmed, _ = mesh.remove_points(np.array(points_to_remove[i]))
+        if len(faces_to_remove[i]) > 0:
+            trimmed = mesh.remove_cells(faces_to_remove[i])
             trimmed_meshes.append(trimmed)
         else:
             trimmed_meshes.append(mesh.copy())
 
     if merge_result:
-        output = pv.PolyData()
-        for mesh in trimmed_meshes:
-            output = output.merge(mesh, merge_points=True)
+        output = []
+        # Merge all sets of intersecting meshes and add to output
+        for intersection_set in intersection_sets:
+            set_list = list(intersection_set)
+            merged = pv.PolyData()
+            for index in set_list:
+                merged = merged.merge(trimmed_meshes[index], merge_points=True)
+            output.append(merged)
+
+        # Add any that were not part of an intersection set
+        intersecting_indices = list(itertools.chain(*intersection_sets))
+        for index, mesh in enumerate(trimmed_meshes):
+            if index not in intersecting_indices:
+                output.append(mesh)
+
     else:
         output = trimmed_meshes
 
-    if not return_removed_points:
+    if not return_removed_faces:
         return output
     else:
-        return output, points_to_remove
+        return output, faces_to_remove
 
 
 def select_shared_faces(mesh_a: pv.PolyData, mesh_b: pv.PolyData, tolerance: float = None) -> Tuple[list, list]:
