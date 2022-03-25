@@ -191,7 +191,7 @@ def gmsh_tetrahedralize(meshes: List[Tuple[np.ndarray, np.ndarray]], gmsh_option
     return nodes, elements
 
 
-def preprocess_and_tetrahedralize(outer_mesh: pv.DataSet, inner_meshes: List[pv.DataSet], mesh_repair_kwargs: dict,
+def preprocess_and_tetrahedralize(outer_mesh: pv.PolyData, inner_meshes: List[pv.PolyData], mesh_repair_kwargs: dict,
                                   gmsh_options: dict) -> pv.UnstructuredGrid:
     """
     Automatically create a tetrahedralization from multiple input surface meshes. The outer mesh represents the
@@ -219,35 +219,37 @@ def preprocess_and_tetrahedralize(outer_mesh: pv.DataSet, inner_meshes: List[pv.
     # Fix all inputs
     fixed_meshes = []
     for mesh in [outer_mesh, *inner_meshes]:
-        fixed_meshes.append(fix_mesh(mesh, mesh_repair_kwargs)[0])
+        if not mesh.is_manifold:
+            fixed_meshes.append(fix_mesh(mesh, mesh_repair_kwargs)[0])
+        else:
+            fixed_meshes.append(mesh)
 
-    # Convert to arrays for boolean process
     fixed_mesh_arrays = [(mesh.points, pyvista_faces_to_2d(mesh.faces)) for mesh in fixed_meshes]
 
-    print("Booleaning...")
+    print("Diffing...")
     # Check all pairs of inner meshes for intersections and create:
-    # # List of meshes where intersecting sets are replaced with a union
     # # List of meshes where intersecting pairs are replaced with a diffed and an original
-    unioned_meshes = union_any_intersecting(fixed_mesh_arrays[1:])
     diffed_meshes = dif_any_intersecting(fixed_mesh_arrays[1:])
-
-    # Convert back to pyvista
-    pv_unioned_meshes = [pv.PolyData(mesh[0], pyvista_faces_to_1d(mesh[1])) for mesh in unioned_meshes]
     pv_diffed_meshes = [pv.PolyData(mesh[0], pyvista_faces_to_1d(mesh[1])) for mesh in diffed_meshes]
-
-    # Fix booleaned meshes
-    fixed_unioned = [fix_mesh(mesh, mesh_repair_kwargs)[0] for mesh in pv_unioned_meshes]
-    fixed_diffed = [fix_mesh(mesh, mesh_repair_kwargs)[0] for mesh in pv_diffed_meshes]
+    fixed_diffed = [fix_mesh(mesh, mesh_repair_kwargs)[0] if not mesh.is_manifold else mesh for mesh in pv_diffed_meshes]
 
     print("Combining...")
     # Remove shared faces to form inner hole
-    combined_unioned = remove_shared_faces_with_ray_trace(fixed_unioned)
-    fixed_combined = [fix_mesh(mesh)[0] for mesh in combined_unioned]
+    combined = remove_shared_faces(fixed_meshes[1:])
+    fixed_combined = [fix_mesh(mesh)[0] if not mesh.is_manifold else mesh for mesh in combined]
     fixed_combined_arrays = [(mesh.points, pyvista_faces_to_2d(mesh.faces)) for mesh in fixed_combined]
 
+    print("Unioning...")
+    # Check all pairs of inner meshes for intersections and create:
+    # # List of meshes where intersecting sets are replaced with a union
+    unioned_meshes = union_any_intersecting(fixed_combined_arrays)
+    pv_unioned_meshes = [pv.PolyData(mesh[0], pyvista_faces_to_1d(mesh[1])) for mesh in unioned_meshes]
+    fixed_unioned = [fix_mesh(mesh, mesh_repair_kwargs)[0] if not mesh.is_manifold else mesh for mesh in pv_unioned_meshes]
+
     print("Tetrahedralizing...")
+    fixed_unioned_arrays = [(mesh.points, pyvista_faces_to_2d(mesh.faces)) for mesh in fixed_unioned]
     # Tetrahedralize outer mesh with hole, then convert to pyvista
-    nodes, elements = gmsh_tetrahedralize([fixed_mesh_arrays[0], *fixed_combined_arrays], gmsh_options)
+    nodes, elements = gmsh_tetrahedralize([fixed_mesh_arrays[0], *fixed_unioned_arrays], gmsh_options)
     outer_tetrahedralized = pyvista_tools.pyvista_tetrahedral_mesh_from_arrays(nodes, elements[1])
 
     # Tetrahedralize each inner mesh, then convert to pyvista

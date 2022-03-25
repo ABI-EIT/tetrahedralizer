@@ -32,9 +32,9 @@ def remove_shared_faces_with_ray_trace(meshes: List[pv.DataSet], ray_length: flo
         ray_hits = []
         for i, intersection_cell in enumerate(intersection_cells):
             # If a ray hit a cell, check the angle of incidence
-            if len(cell := intersection_cell) > 0:
+            if len(intersection_cell) > 0:
                 # Index of intersection_cells refers to cells in mesh_b. The cell itself refers to cells in mesh_a
-                angle_of_indicence = (angle_between(mesh_a.cell_normals[cell], mesh_b.cell_normals[i]) - np.pi)[0]
+                angle_of_indicence = (angle_between(mesh_a.cell_normals[intersection_cell], mesh_b.cell_normals[i]) - np.pi)[0]
                 if 0.5 * incidence_angle_tolerance > angle_of_indicence > -0.5 * incidence_angle_tolerance:
                     ray_hits.append(i)
 
