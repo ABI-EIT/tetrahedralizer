@@ -11,12 +11,26 @@ from pyvista import UnstructuredGrid
 
 def remove_shared_faces_with_ray_trace(meshes: List[pv.DataSet], ray_length: float = 0.01,
                                        incidence_angle_tolerance: float = 0.01,
-                                       return_removed_faces: bool = False, merge_result=True) -> Union[
-        List[pv.PolyData], Tuple[List[pv.PolyData], list]]:
+                                       return_removed_faces: bool = False, merge_result=True)\
+                                                            -> Union[List[pv.PolyData], Tuple[List[pv.PolyData], list]]:
+    """
+
+    Parameters
+    ----------
+    meshes
+    ray_length
+    incidence_angle_tolerance
+    return_removed_faces
+    merge_result
+
+    Returns
+    -------
+
+    """
     # Construct rays normal to each mesh face of length 1*ray_length
     mesh_rays = []
     for mesh in meshes:
-        mesh.compute_normals(auto_orient_normals=True)
+        mesh = mesh.compute_normals(auto_orient_normals=True)
         ray_starts = mesh.cell_centers().points - (mesh.cell_normals * ray_length)
         ray_ends = mesh.cell_centers().points + (mesh.cell_normals * ray_length)
         # Create list of tuples, each corresponding to a single ray
@@ -34,7 +48,7 @@ def remove_shared_faces_with_ray_trace(meshes: List[pv.DataSet], ray_length: flo
             # If a ray hit a cell, check the angle of incidence
             if len(intersection_cell) > 0:
                 # Index of intersection_cells refers to cells in mesh_b. The cell itself refers to cells in mesh_a
-                angle_of_indicence = (angle_between(mesh_a.cell_normals[intersection_cell], mesh_b.cell_normals[i]) - np.pi)[0]
+                angle_of_indicence = (angle_between(mesh_a.cell_normals[intersection_cell], mesh_b.cell_normals[i]) % (np.pi/2))[0]
                 if 0.5 * incidence_angle_tolerance > angle_of_indicence > -0.5 * incidence_angle_tolerance:
                     ray_hits.append(i)
 
@@ -227,6 +241,8 @@ def select_points_in_faces(mesh: pv.PolyData, points: List[int] = None, faces: L
 
     Only works on meshes with all the same number of points per face.
 
+    Todo: not crash if you don't specify points (till then you can use list(range(len(mesh.points)))
+
     Parameters
     ----------
     mesh
@@ -388,3 +404,27 @@ def pyvista_tetrahedral_mesh_from_arrays(nodes, tets) -> pyvista.UnstructuredGri
     ])
     mesh = pv.UnstructuredGrid(pyvista_faces_to_1d(tets), cell_type, nodes)
     return mesh
+
+
+def extract_faces_with_edges(dataset: pv.PolyData, edges: pv.PolyData):
+
+    dataset = dataset.merge(edges)
+
+    faces_using_edges = []
+    for i, face in enumerate(pyvista_faces_to_2d(dataset.faces)):
+        for line in pyvista_faces_to_2d(dataset.lines):
+            if find_sequence(face, line) >= 0:
+                faces_using_edges.append(i)
+
+    return faces_using_edges
+
+
+def find_sequence(array, sequence):
+    location = -1
+    # hstack array so we can find sequences that wrap around
+    array = np.hstack((array, array))
+    for i in range(len(array)-len(sequence)+1):
+        if np.all(array[i:i+len(sequence)] == sequence):
+            location = i
+            break
+    return location
