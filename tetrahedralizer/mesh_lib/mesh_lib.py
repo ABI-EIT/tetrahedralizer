@@ -235,7 +235,7 @@ def preprocess_and_tetrahedralize(outer_mesh: pv.PolyData, inner_meshes: List[pv
 
     print("Combining...")
     # Remove shared faces to form inner hole
-    combined = remove_shared_faces(fixed_meshes[1:])
+    combined = remove_shared_faces(inner_meshes)
     fixed_combined = [fix_mesh(mesh)[0] if not mesh.is_manifold else mesh for mesh in combined]
     fixed_combined_arrays = [(mesh.points, pyvista_faces_to_2d(mesh.faces)) for mesh in fixed_combined]
 
