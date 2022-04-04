@@ -1,9 +1,11 @@
 from tetrahedralizer.pyvista_tools import remove_shared_faces, select_shared_faces, select_points_in_faces, \
     pyvista_faces_by_dimension, pyvista_faces_to_2d, pyvista_faces_to_1d, select_shared_points, \
-    select_faces_using_points, remove_shared_faces_with_ray_trace
+    select_faces_using_points, remove_shared_faces_with_ray_trace, find_sequence, extract_faces_with_edges
 
 import numpy as np
 import pyvista as pv
+import collections
+from matplotlib import cm
 
 mesh_a_verts = np.array([[0, 0, 0],
                          [0, 0, 1],
@@ -259,6 +261,116 @@ def test_pyvista_faces_by_dimension():
     faces_by_dim = pyvista_faces_by_dimension(mesh.faces)
     assert np.array_equal(faces_by_dim[3], np.array([3, 0, 1, 4, 3, 1, 2, 4]))
     assert np.array_equal(faces_by_dim[4], np.array([4, 0, 1, 2, 3]))
+
+
+def test_extract_faces_edges_lines():
+    b = pv.Box()
+    b = b.remove_cells(0)
+    edges = b.extract_feature_edges(boundary_edges=True, non_manifold_edges=False,
+                                    feature_edges=False, manifold_edges=False)
+
+    faces = extract_faces_with_edges(b, edges)
+
+    # b["points"] = np.array((range(0, len(b.points))))
+    # p = pv.Plotter()
+    # p.add_mesh(b)
+    # p.add_point_labels(b, "points")
+    # p.show()
+
+    assert np.array_equal(faces, [1, 2, 3, 4])
+
+
+def test_extract_faces_with_edges_duplicates():
+    b = pv.Box()
+    b = b.remove_cells([0, 1, 2])
+    edges = b.extract_feature_edges(boundary_edges=True, non_manifold_edges=False,
+                                    feature_edges=False, manifold_edges=False)
+
+    faces = extract_faces_with_edges(b, edges)
+
+    # b["points"] = np.array((range(0, len(b.points))))
+    # p = pv.Plotter()
+    # p.add_mesh(b)
+    # p.add_point_labels(b, "points")
+    # p.show()
+
+    three_sides = [item for item, count in collections.Counter(faces).items() if count > 2]
+
+    assert np.array_equal(three_sides, [1, 2])
+
+
+def test_extract_faces_with_edges_flap():
+    b = pv.Box(quads=False)
+    b = b.remove_cells(0)
+    b.points = np.vstack((b.points, [0, 0, 0]))
+    b.faces = pyvista_faces_to_1d(np.vstack((pyvista_faces_to_2d(b.faces), [0, 1, 8])))
+
+    edges = b.extract_feature_edges(boundary_edges=True, non_manifold_edges=False,
+                                    feature_edges=False, manifold_edges=False)
+
+    faces = extract_faces_with_edges(b, edges)
+    two_sides = [item for item, count in collections.Counter(faces).items() if count > 1]
+
+    # b["points"] = np.array((range(0, len(b.points))))
+    #
+    # bf = np.array([0 if not np.any(np.isin(faces, i)) else 1 for i in range(b.n_faces)])
+    # double_bf = np.array([0 if not np.any(np.isin(two_sides, i)) else 1 for i in range(b.n_faces)])
+    #
+    # b["boundary_faces"] = bf+double_bf
+    # c = b.remove_cells(two_sides)
+    # p = pv.Plotter(shape=(1, 2))
+    # p.add_mesh(b, show_edges=True, scalars="boundary_faces", cmap=cm.get_cmap("Set1_r"))
+    # p.add_point_labels(b, "points")
+    # p.add_mesh(edges, color="red", label="Boundary Edges", line_width=2)
+    # p.add_legend()
+    # p.subplot(0, 1)
+    # p.add_mesh(c, show_edges=True, scalars="boundary_faces", cmap=cm.get_cmap("Set1_r"))
+    # p.add_mesh(edges, color="red", label="Boundary Edges", line_width=2)
+    # p.show()
+
+    assert(np.array_equal(two_sides, [11]))
+
+
+# def test_extract_faces_with_edges_non_manifold_plus_flap():
+#     b = pv.Box(quads=False)
+#     b = b.remove_cells(0)
+#     b.points = np.vstack((b.points, [0, 0, 0]))
+#     b.faces = pyvista_faces_to_1d(np.vstack((pyvista_faces_to_2d(b.faces), [0, 1, 8])))
+#     b.points = np.vstack((b.points, [0.5, 0, 0]))
+#     b.faces = pyvista_faces_to_1d(np.vstack((pyvista_faces_to_2d(b.faces), [3, 5, 9])))
+#
+#     edges = b.extract_feature_edges(boundary_edges=True, non_manifold_edges=False,
+#                                     feature_edges=False, manifold_edges=False)
+#
+#     faces = extract_faces_with_edges(b, edges)
+#     two_sides = [item for item, count in collections.Counter(faces).items() if count > 1]
+#
+#     b["points"] = np.array((range(0, len(b.points))))
+#     b["boundary_faces"] = np.array([0 if not np.any(np.isin(faces, i)) else 1 for i in range(b.n_faces)])
+#     b["double_boundary_faces"] = np.array([0 if not np.any(np.isin(two_sides, i)) else 1 for i in range(b.n_faces)])
+#     p = pv.Plotter()
+#     p.add_mesh(b, show_edges=True, scalars="double_boundary_faces", cmap=cm.get_cmap("Set1_r"))
+#     p.add_point_labels(b, "points")
+#     p.add_mesh(edges, color="red", label="Boundary Edges", line_width=2)
+#     p.add_legend()
+#     p.show()
+#
+#     assert(np.array_equal(two_sides, [11]))
+
+
+def test_find_sequence():
+    a = [1, 2, 3, 4]
+    b = [1, 2]
+    c = [2, 3]
+    d = [1, 3]
+
+    ab = find_sequence(a, b)
+    ac = find_sequence(a, c)
+    ad = find_sequence(a, d)
+
+    assert(ab == 0)
+    assert(ac == 1)
+    assert(ad == -1)
 
 
 def main():
