@@ -9,6 +9,103 @@ import pyvista as pv
 from pyvista import UnstructuredGrid
 
 
+def remove_shared_faces_with_ray_trace(meshes: List[pv.DataSet], ray_length: float = 0.01,
+                                       incidence_angle_tolerance: float = 0.01,
+                                       return_removed_faces: bool = False, merge_result=True) -> Union[
+        List[pv.PolyData], Tuple[List[pv.PolyData], list]]:
+    # Construct rays normal to each mesh face of length 1*ray_length
+    mesh_rays = []
+    for mesh in meshes:
+        mesh.compute_normals(auto_orient_normals=True)
+        ray_starts = mesh.cell_centers().points - (mesh.cell_normals * ray_length)
+        ray_ends = mesh.cell_centers().points + (mesh.cell_normals * ray_length)
+        # Create list of tuples, each corresponding to a single ray
+        mesh_rays.append([(ray_start, ray_end) for ray_start, ray_end in zip(ray_starts, ray_ends)])
+
+    cells_to_remove = [[] for _ in range(len(meshes))]
+    intersection_sets = []
+    # Iterate through all permutations with mesh_b shooting rays and mesh_a checking them
+    for (i_a, (mesh_a, _)), (i_b, (mesh_b, mesh_rays_b)) in itertools.permutations(enumerate(zip(meshes, mesh_rays)), 2):
+        # Check which rays from mesh b hit mesh a
+        _, intersection_cells = zip(*[mesh_a.ray_trace(*ray) for ray in mesh_rays_b])
+
+        ray_hits = []
+        for i, intersection_cell in enumerate(intersection_cells):
+            # If a ray hit a cell, check the angle of incidence
+            if len(intersection_cell) > 0:
+                # Index of intersection_cells refers to cells in mesh_b. The cell itself refers to cells in mesh_a
+                angle_of_indicence = (angle_between(mesh_a.cell_normals[intersection_cell], mesh_b.cell_normals[i]) - np.pi)[0]
+                if 0.5 * incidence_angle_tolerance > angle_of_indicence > -0.5 * incidence_angle_tolerance:
+                    ray_hits.append(i)
+
+        # Remove cells whose ray hit a parallel cell
+        # If mesh_a and mesh_b intersect, we need to record this so we can merge them later
+        if ray_hits:
+            cells_to_remove[i_b].extend(np.array(ray_hits))
+
+            # If a is already part of a set, add b to it
+            if np.any([i_a in s for s in intersection_sets]):
+                intersection_sets[np.argmax([i_a in s for s in intersection_sets])].add(i_b)
+            # Else if b is already part of a set, add a to it
+            elif np.any([i_b in s for s in intersection_sets]):
+                intersection_sets[np.argmax([i_b in s for s in intersection_sets])].add(i_a)
+            # Else make a new one with both
+            else:
+                intersection_sets.append(set([i_a, i_b]))
+
+    trimmed_meshes = []
+    for i, mesh in enumerate(meshes):
+        if len(cells_to_remove[i]) > 0:
+            trimmed = mesh.remove_cells(cells_to_remove[i])
+            trimmed_meshes.append(trimmed)
+        else:
+            trimmed_meshes.append(mesh.copy())
+
+    if merge_result:
+        output = []
+        # Merge all sets of intersecting meshes and add to output
+        for intersection_set in intersection_sets:
+            set_list = list(intersection_set)
+            merged = pv.PolyData()
+            for index in set_list:
+                merged = merged.merge(trimmed_meshes[index], merge_points=True)
+            output.append(merged)
+
+        # Add any that were not part of an intersection set
+        intersecting_indices = list(itertools.chain(*intersection_sets))
+        for index, mesh in enumerate(trimmed_meshes):
+            if index not in intersecting_indices:
+                output.append(mesh)
+
+    else:
+        output = trimmed_meshes
+
+    if not return_removed_faces:
+        return output
+    else:
+        return output, cells_to_remove
+
+
+def unit_vector(vector):
+    """ Returns the unit vector of the vector.  """
+    return vector / np.linalg.norm(vector)
+
+
+def angle_between(v1, v2):
+    """ Returns the angle in radians between vectors 'v1' and 'v2'::
+
+            angle_between((1, 0, 0), (0, 1, 0))
+            1.5707963267948966
+            angle_between((1, 0, 0), (1, 0, 0))
+            0.0
+            angle_between((1, 0, 0), (-1, 0, 0))
+            3.141592653589793
+    """
+    v1_u = unit_vector(v1)
+    v2_u = unit_vector(v2)
+    return np.arccos(np.clip(np.dot(v1_u, v2_u), -1.0, 1.0))
+
+
 def remove_shared_faces(meshes: List[pv.DataSet], tolerance: float = None,
                         return_removed_faces: bool = False, merge_result=True) -> Union[
         List[pv.PolyData], Tuple[List[pv.PolyData], list]]:

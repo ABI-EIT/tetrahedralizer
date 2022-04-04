@@ -39,8 +39,8 @@ def main():
     Tk().destroy()
 
     # Load files
-    outer_mesh = pv.read(filename)
-    inner_meshes = [pv.read(filename) for filename in filenames]
+    outer_mesh = pv.PolyData(pv.read(filename))
+    inner_meshes = [pv.PolyData(pv.read(filename)) for filename in filenames]
 
     # Run tetrahedralizer
     combined = preprocess_and_tetrahedralize(outer_mesh, inner_meshes, mesh_repair_kwargs, gmsh_options)
