@@ -38,10 +38,14 @@ def main():
     meshes = [pv.PolyData(pv.read(filename)) for filename in filenames]
 
     # Combine lobes
+    # trimmed_meshes, removed_faces = \
+    #     remove_shared_faces_with_ray_trace(meshes, ray_length=ray_length,
+    #                                        incidence_angle_tolerance=incidence_angle_tolerance,
+    #                                        return_removed_faces=True)
+
     trimmed_meshes, removed_faces = \
-        remove_shared_faces_with_ray_trace(meshes, ray_length=ray_length,
-                                           incidence_angle_tolerance=incidence_angle_tolerance,
-                                           return_removed_faces=True)
+        remove_shared_faces(meshes, return_removed_faces=True)
+
     combined = pv.PolyData()
     for mesh in trimmed_meshes:
         combined = combined.merge(mesh)

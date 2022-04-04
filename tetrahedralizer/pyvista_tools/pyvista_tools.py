@@ -372,7 +372,7 @@ def select_faces_using_points(mesh: pv.PolyData, points: list) -> List[int]:
 
     """
     mesh_faces = []
-    faces = mesh.faces.reshape(-1, 4)[:, 1:]
+    faces = pyvista_faces_to_2d(mesh.faces)
     points_set = set(points)
     for j, face in enumerate(faces):
         # Check if all of the points in each face are in the target points set
