@@ -1,9 +1,11 @@
 import gmsh
 import numpy as np
 from tetrahedralizer.mesh_lib import gmsh_load_from_arrays, gmsh_tetrahedral_mesh_to_arrays, gmsh_tetrahedralize, \
-    preprocess_and_tetrahedralize, remove_shared_faces
+    preprocess_and_tetrahedralize, pymeshlab_boolean
 import pyvista as pv
-from tetrahedralizer.pyvista_tools import pyvista_faces_to_2d, pyvista_tetrahedral_mesh_from_arrays
+from tetrahedralizer.pyvista_tools import pyvista_faces_to_2d, pyvista_faces_to_1d, \
+    pyvista_tetrahedral_mesh_from_arrays, rewind_faces_to_normals
+from matplotlib import cm
 
 mesh_a_verts = np.array([[0, 0, 0],
                          [0, 0, 1],
@@ -196,5 +198,62 @@ def test_preprocess_and_tetrahedralize_simple():
     assert np.array_equal(tet.cells, correct_cells)
 
 
+def test_pymeshlab_boolean():
+    a = pv.Box(quads=False)
+    b = pv.Box(quads=False).translate([0, 0, 0.5], inplace=False)
+
+    mesh_arrays = [(mesh.points, pyvista_faces_to_2d(mesh.faces)) for mesh in [a, b]]
+
+    unioned_mesh = pymeshlab_boolean((mesh_arrays[0], mesh_arrays[1]), operation="Union")
+    pv_union = pv.PolyData(unioned_mesh[0], pyvista_faces_to_1d(unioned_mesh[1]))
+
+    # p = pv.Plotter()
+    # p.add_mesh(pv_union, cmap=cm.get_cmap("Set1"), style="wireframe")
+    # p.show()
+
+    points = np.array([[-1., -1., -1.], [-1., -1., -0.5], [-1., -1., 1.], [-1., -1., 1.5],
+                       [-1., -0.5, -0.5], [-1., 0.5, 1.], [-1., 1., -1.], [-1., 1., -0.5],
+                       [-1., 1., 1.], [-1., 1., 1.5], [-0.5, -1., -0.5], [-0.5, 1., 1.],
+                       [0.5, -1., 1.], [0.5, 1., -0.5], [1., -1., -1.], [1., -1., -0.5],
+                       [1., -1., 1.], [1., -1., 1.5], [1., -0.5, 1.], [1., 0.5, -0.5],
+                       [1., 1., -1.], [1., 1., -0.5], [1., 1., 1.], [1., 1., 1.5]])
+    faces = np.array([3, 0, 1, 4, 3, 1, 0, 10, 3, 6, 0, 4, 3, 14, 0, 6, 3,
+                      0, 14, 10, 3, 1, 2, 5, 3, 2, 1, 12, 3, 4, 1, 5, 3, 12,
+                      1, 10, 3, 5, 2, 3, 3, 12, 3, 2, 3, 5, 3, 9, 3, 3, 23,
+                      9, 3, 17, 3, 12, 3, 3, 17, 23, 3, 4, 5, 8, 3, 7, 6, 4,
+                      3, 7, 4, 8, 3, 8, 5, 9, 3, 6, 7, 13, 3, 20, 6, 13, 3,
+                      14, 6, 20, 3, 7, 8, 13, 3, 8, 9, 11, 3, 8, 11, 13, 3, 23,
+                      11, 9, 3, 16, 12, 10, 3, 10, 14, 15, 3, 10, 15, 16, 3, 13, 11,
+                      21, 3, 11, 22, 21, 3, 11, 23, 22, 3, 17, 12, 16, 3, 13, 21, 20,
+                      3, 19, 15, 14, 3, 19, 14, 20, 3, 16, 15, 19, 3, 18, 17, 16, 3,
+                      18, 16, 19, 3, 18, 23, 17, 3, 21, 18, 19, 3, 21, 22, 18, 3, 22,
+                      23, 18, 3, 20, 21, 19])
+
+    assert np.array_equal(pv_union.points, points)
+    assert np.array_equal(pv_union.faces, faces)
+
+
+def test_pymeshlab_boolean_wrong_normals():
+    a = pv.Box(quads=False)
+    # Wind one face backwards, causing pymeshlab to compute normal facing inwards
+    f = a.faces
+    f[5:8] = [0, 2, 6]
+    b = pv.PolyData(a.points, f)
+    c = pv.Box(quads=False).translate([0, 0, 0.5], inplace=False)
+
+    d = rewind_faces_to_normals(b)
+
+    mesh_arrays = [(mesh.points, pyvista_faces_to_2d(mesh.faces)) for mesh in [a, b, c, d]]
+    mesh_arrays_with_normals = [(mesh.points, pyvista_faces_to_2d(mesh.faces), mesh.face_normals) for mesh in [a, b, c]]
+
+    unioned_mesh_a_c = pymeshlab_boolean((mesh_arrays[0], mesh_arrays[2]), operation="Union")
+    unioned_mesh_b_c = pymeshlab_boolean((mesh_arrays[1], mesh_arrays[2]), operation="Union")
+    unioned_mesh_b_c_with_norms = pymeshlab_boolean((mesh_arrays_with_normals[1], mesh_arrays_with_normals[2]), operation="Union")
+    unioned_mesh_d_c = pymeshlab_boolean((mesh_arrays[3], mesh_arrays[2]), operation="Union")
+
+    assert unioned_mesh_a_c is not None  # Normal mesh unions fine
+    assert unioned_mesh_b_c is None  # Fails when we wind a face the wrong way
+    assert unioned_mesh_b_c_with_norms is None  # Setting normals should make it work again. Keep this here to check if they ever fix this
+    assert unioned_mesh_d_c is not None  # Works again if you rewind the face back
 
 

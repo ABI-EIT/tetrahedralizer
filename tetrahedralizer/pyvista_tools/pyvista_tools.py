@@ -7,6 +7,7 @@ import vtkmodules.util
 from numpy.typing import NDArray
 import pyvista as pv
 from pyvista import UnstructuredGrid
+from tqdm import tqdm
 
 
 def remove_shared_faces_with_ray_trace(meshes: List[pv.DataSet], ray_length: float = 0.01,
@@ -121,7 +122,7 @@ def angle_between(v1, v2):
 
 
 def remove_shared_faces(meshes: List[pv.DataSet], tolerance: float = None,
-                        return_removed_faces: bool = False, merge_result=True) -> Union[
+                        return_removed_faces: bool = False, merge_result=True, progress_bar: bool = False) -> Union[
         List[pv.PolyData], Tuple[List[pv.PolyData], list]]:
     """
     Remove faces shared by any two of a list of Pyvista Polydata and merge the result. This is similar to the Pyvista
@@ -139,6 +140,8 @@ def remove_shared_faces(meshes: List[pv.DataSet], tolerance: float = None,
         Default True
     return_removed_faces
         If true, returns a list of faces that were removed.
+    progress_bar
+        Include a progress bar
 
     Returns
     -------
@@ -151,9 +154,10 @@ def remove_shared_faces(meshes: List[pv.DataSet], tolerance: float = None,
     # For each pair:
     faces_to_remove = [[] for _ in range(len(meshes))]
     intersection_sets = []
-    for (index_a, mesh_a), (index_b, mesh_b) in itertools.combinations(enumerate(meshes), 2):
+    for (index_a, mesh_a), (index_b, mesh_b) in tqdm(list(itertools.combinations(enumerate(meshes), 2)),
+                                                     disable=not progress_bar, desc="Removing Shared Faces"):
         shared_points_kwargs = {"mesh_a": mesh_a, "mesh_b": mesh_b, "tolerance": tolerance}
-        shared_points_a, shared_points_b = select_shared_points(**{k: v for k, v in shared_points_kwargs.items() if v is not None})
+        shared_points_a, shared_points_b = select_shared_points(**{k: v for k, v in shared_points_kwargs.items() if v is not None}, progress_bar=progress_bar)
 
         mesh_a_faces = select_faces_using_points(mesh_a, shared_points_a)
         mesh_b_faces = select_faces_using_points(mesh_b, shared_points_b)
@@ -336,7 +340,7 @@ def pyvista_faces_to_1d(faces: NDArray) -> NDArray:
     return np.insert(faces, 0, values=padding, axis=1).ravel()
 
 
-def select_shared_points(mesh_a: pv.PolyData, mesh_b: pv.PolyData, tolerance: float = 1e-05) \
+def select_shared_points(mesh_a: pv.PolyData, mesh_b: pv.PolyData, tolerance: float = 1e-05, progress_bar: bool = False) \
         -> Tuple[List[int], List[int]]:
     """
     Select the points that two meshes share. Points are considered shared if they are within a specified euclidian
@@ -350,6 +354,7 @@ def select_shared_points(mesh_a: pv.PolyData, mesh_b: pv.PolyData, tolerance: fl
         Second mesh
     tolerance
         Maximum euclidian distance between points to consider them shared
+    progress_bar
 
     Returns
     -------
@@ -359,7 +364,7 @@ def select_shared_points(mesh_a: pv.PolyData, mesh_b: pv.PolyData, tolerance: fl
     """
     shared_points_a = []
     shared_points_b = []
-    for i_a, point_a in enumerate(mesh_a.points):
+    for i_a, point_a in tqdm(list(enumerate(mesh_a.points)), disable= not progress_bar, desc="Selecting Shared Points"):
         for i_b, point_b in enumerate(mesh_b.points):
             # linalg.norm calculates euclidean distance
             if np.linalg.norm(point_a - point_b) <= tolerance:
@@ -428,3 +433,52 @@ def find_sequence(array, sequence):
             location = i
             break
     return location
+
+
+def compute_face_winding_orders(mesh: pv.PolyData):
+    if not mesh.is_all_triangles:
+        raise ValueError("Mesh must be all triangles")
+
+    faces = pyvista_faces_to_2d(mesh.faces)
+    face_coords = mesh.points[faces]
+
+    winding_orders = []
+    for coords, normal in zip(face_coords, mesh.face_normals):
+        winding_order = compute_triangle_winding_order(coords[0], coords[1], coords[2], normal)
+        winding_orders.append(winding_order)
+
+    return winding_orders
+
+
+def compute_triangle_winding_order(a, b, c, normal):
+    expected_normal = np.cross(b - a, c - b)
+    agreement = np.dot(expected_normal, normal)
+
+    return agreement
+
+
+def rewind_face(mesh, face_num, inplace=False):
+    faces = pyvista_faces_to_2d(mesh.faces)
+    face = faces[face_num]
+    face = [face[0], *face[-1:0:-1]]  # Start at same point, then reverse the rest of the face nodes
+    faces[face_num] = face
+
+    if inplace:
+        mesh.faces = pyvista_faces_to_1d(faces)
+    else:
+        mesh_out = mesh.copy()
+        mesh_out.faces = pyvista_faces_to_1d(faces)
+        return mesh_out
+
+
+def rewind_faces_to_normals(mesh, inplace=False):
+    mesh_c = mesh.copy()
+
+    mesh_face_order = compute_face_winding_orders(mesh_c)
+    for i in np.where(np.array(mesh_face_order) < 0)[0]:
+        mesh_c = rewind_face(mesh_c, i)
+
+    if inplace:
+        mesh.faces = mesh_c.faces
+    else:
+        return mesh_c

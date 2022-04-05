@@ -3,7 +3,7 @@ from tkinter import Tk
 from tkinter.filedialog import askopenfilename
 from matplotlib import cm
 import numpy as np
-from tetrahedralizer.pyvista_tools import pyvista_faces_to_2d, extract_faces_with_edges, pyvista_faces_to_1d
+from tetrahedralizer.pyvista_tools import pyvista_faces_to_2d, extract_faces_with_edges, pyvista_faces_to_1d, rewind_faces_to_normals
 import os
 import pathlib
 import meshio
@@ -41,6 +41,7 @@ def main():
         surface = surface.clean()  # Clean again to remove points left from tris
         surface = surface.fill_holes(1000)  # Fill holes left by tris
         surface = surface.triangulate()
+        surface = rewind_faces_to_normals(surface)
         section_surfaces[section] = surface
 
     # Plot input meshes

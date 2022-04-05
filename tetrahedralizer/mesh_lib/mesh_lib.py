@@ -50,13 +50,16 @@ pymeshlab_op_map = {
 }
 
 
-def pymeshlab_boolean(meshes: Tuple[Tuple[np.ndarray, np.ndarray], Tuple[np.ndarray, np.ndarray]], operation: str) \
+def pymeshlab_boolean(meshes: Tuple[Tuple[np.ndarray, ...], Tuple[np.ndarray, ...]], operation: str) \
         -> Optional[Tuple[np.ndarray, np.ndarray]]:
     """
     Run a pymesh boolean operation on two input meshes. The meshes are described as a platform agnostic Tuple of ndarrays
     representing mesh vertices and faces. The format is as follows:
     Tuple element 0: 3xN ndarray of float representing XYZ points in 3D space
     Tuple element 1: 3xN ndarray of int representing triangular faces composed of indices the points
+
+    Optionally, face normals can be specified:
+    Tuple element 2: 3xN ndarray of float representing face normals. But this doesn't work
 
     Parameters
     ----------
@@ -74,7 +77,12 @@ def pymeshlab_boolean(meshes: Tuple[Tuple[np.ndarray, np.ndarray], Tuple[np.ndar
 
     ms = pymeshlab.MeshSet()
     for mesh in meshes:
-        ml_mesh = pymeshlab.Mesh(mesh[0], mesh[1])
+        if len(mesh) == 2:
+            ml_mesh = pymeshlab.Mesh(mesh[0], mesh[1])
+        elif len(mesh) == 3:
+            ml_mesh = pymeshlab.Mesh(mesh[0], mesh[1], f_normals_matrix=mesh[2])
+        else:
+            raise ValueError("Incorrect number of elements in mesh Tuple")
         ms.add_mesh(ml_mesh)
 
     func = getattr(ms, pymeshlab_op_map[operation])
@@ -235,7 +243,7 @@ def preprocess_and_tetrahedralize(outer_mesh: pv.PolyData, inner_meshes: List[pv
 
     print("Combining...")
     # Remove shared faces to form inner hole
-    combined = remove_shared_faces(inner_meshes)
+    combined = remove_shared_faces(inner_meshes, progress_bar=True)
     fixed_combined = [fix_mesh(mesh)[0] if not mesh.is_manifold else mesh for mesh in combined]
     fixed_combined_arrays = [(mesh.points, pyvista_faces_to_2d(mesh.faces)) for mesh in fixed_combined]
 
@@ -373,3 +381,6 @@ def dif_any_intersecting(meshes: List[Tuple[np.ndarray, np.ndarray]]) -> List[Tu
             diffed_meshes.append(mesh)
 
     return diffed_meshes
+
+
+
