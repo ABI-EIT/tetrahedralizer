@@ -1,6 +1,7 @@
 from tetrahedralizer.pyvista_tools import remove_shared_faces, select_shared_faces, select_points_in_faces, \
     pyvista_faces_by_dimension, pyvista_faces_to_2d, pyvista_faces_to_1d, select_shared_points, \
-    select_faces_using_points, remove_shared_faces_with_ray_trace, find_sequence, extract_faces_with_edges
+    select_faces_using_points, remove_shared_faces_with_ray_trace, find_sequence, extract_faces_with_edges, \
+    find_loops_and_chains, triangulate_loop
 
 import numpy as np
 import pyvista as pv
@@ -371,6 +372,27 @@ def test_find_sequence():
     assert(ab == 0)
     assert(ac == 1)
     assert(ad == -1)
+
+
+def test_find_loops_and_chains():
+    lines = [[1, 2], [2, 3], [3, 1], [5, 6], [6, 7]]
+
+    correct_loops = [[(1, 2), (2, 3), (3, 1)]]
+    correct_chains = [[(5, 6), (6, 7)]]
+
+    loops, chains = find_loops_and_chains(lines)
+
+    assert np.array_equal(loops, correct_loops)
+    assert np.array_equal(chains, correct_chains)
+
+
+def test_triangulate_loop():
+    loop = [(1, 2), (2, 3), (3, 4), (4, 5), (5, 6), (6, 7), (7, 8), (8, 1)]
+    correct_faces = [[8, 1, 2], [3, 8, 2], [7, 8, 3], [4, 7, 3], [6, 7, 4], [5, 6, 4]]
+
+    faces = triangulate_loop(loop)
+
+    assert np.array_equal(faces, correct_faces)
 
 
 def main():
