@@ -1,7 +1,7 @@
 from tetrahedralizer.pyvista_tools import remove_shared_faces, select_shared_faces, select_points_in_faces, \
     pyvista_faces_by_dimension, pyvista_faces_to_2d, pyvista_faces_to_1d, select_shared_points, \
     select_faces_using_points, remove_shared_faces_with_ray_trace, find_sequence, extract_faces_with_edges, \
-    find_loops_and_chains, triangulate_loop
+    find_loops_and_chains, triangulate_loop_with_stitch, triangulate_loop_with_nearest_neighbors, select_intersecting_triangles
 
 import numpy as np
 import pyvista as pv
@@ -374,6 +374,17 @@ def test_find_sequence():
     assert(ad == -1)
 
 
+def test_find_sequence_reverse():
+    a = [1, 2, 3, 4]
+    b = [2, 1]
+    c = [3, 1]
+
+    abr = find_sequence(a, b, check_reverse=True)
+    acr = find_sequence(a, c, check_reverse=True)
+    assert abr == 0
+    assert acr == -1
+
+
 def test_find_loops_and_chains():
     lines = [[1, 2], [2, 3], [3, 1], [5, 6], [6, 7]]
 
@@ -390,9 +401,63 @@ def test_triangulate_loop():
     loop = [(1, 2), (2, 3), (3, 4), (4, 5), (5, 6), (6, 7), (7, 8), (8, 1)]
     correct_faces = [[8, 1, 2], [3, 8, 2], [7, 8, 3], [4, 7, 3], [6, 7, 4], [5, 6, 4]]
 
-    faces = triangulate_loop(loop)
+    faces = triangulate_loop_with_stitch(loop)
 
     assert np.array_equal(faces, correct_faces)
+
+
+def test_triangulate_loop_with_nearest_neighbors_boundary_m():
+    points = np.array([[0, 0, 0], [1, 0, 0], [3, 0, 0], [0, 1, 0], [0.5, 1, 0], [1, 0.5, 0], [2, 1, 0], [3, 1, 0]])
+    loop = np.array([[1, 2], [2, 7], [7, 6], [6, 5], [5, 4], [4, 3], [3, 0], [0, 1]])
+    correct_faces = [[0, 5, 1], [3, 5, 0], [4, 5, 3], [6, 1, 5], [7, 1, 6], [2, 1, 7]]
+
+    faces = triangulate_loop_with_nearest_neighbors(loop, points)
+
+    # boundary = pv.PolyData(points, lines=pyvista_faces_to_1d(loop))
+    # mesh = pv.PolyData(boundary.points, pyvista_faces_to_1d(faces))
+    # p = pv.Plotter()
+    # p.add_mesh(mesh, style="wireframe")
+    # p.add_mesh(boundary, color="red")
+    # p.show()
+
+    assert np.array_equal(faces, correct_faces)
+
+
+def test_triangulate_loop_with_nearest_neighbors_boundary_square():
+    points = np.array([[0, 0, 0], [1, 0, 0], [2, 0, 0], [2, 1, 0], [2, 2, 0], [1, 2, 0], [0, 2, 0], [0, 1, 0]])
+    loop = np.array([[0, 1], [1, 2], [2, 3], [3, 4], [4, 5], [5, 6], [6, 7], [7, 0]])
+    correct_faces = [[7, 1, 0], [6, 1, 7], [5, 1, 6], [4, 1, 5], [3, 1, 4], [2, 1, 3]]
+
+    faces = triangulate_loop_with_nearest_neighbors(loop, points)
+
+    # boundary = pv.PolyData(points, lines=pyvista_faces_to_1d(loop))
+    # mesh = pv.PolyData(boundary.points, pyvista_faces_to_1d(faces))
+    # p = pv.Plotter()
+    # p.add_mesh(mesh, style="wireframe")
+    # p.add_mesh(boundary, color="red")
+    # p.show()
+
+    assert np.array_equal(faces, correct_faces)
+
+
+def test_triangulate_loop_with_nearest_neighbors_boundary_3d():
+    points = np.array([[0, 0, 0], [1, 1, 1], [2, 0, 0], [2, 1, 0], [2, 2, 0], [1, 2, 0], [0, 2, 0], [0, 1, 0]])
+    loop = np.array([[0, 1], [1, 2], [2, 3], [3, 4], [4, 5], [5, 6], [6, 7], [7, 0]])
+
+    faces = triangulate_loop_with_nearest_neighbors(loop, points)
+    mesh = pv.PolyData(points, pyvista_faces_to_1d(faces))
+
+    intersecting_triangles = select_intersecting_triangles(mesh, justproper=True)
+
+    boundary = pv.PolyData(points, lines=pyvista_faces_to_1d(loop))
+    p = pv.Plotter()
+    p.add_mesh(mesh, style="wireframe")
+    p.add_mesh(boundary, color="red")
+    p.show()
+
+    assert intersecting_triangles == []
+
+
 
 
 def main():

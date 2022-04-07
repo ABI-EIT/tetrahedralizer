@@ -9,7 +9,7 @@ from numpy.typing import NDArray, ArrayLike
 import pyvista as pv
 from pyvista import UnstructuredGrid
 from tqdm import tqdm
-
+import pymeshfix
 
 def remove_shared_faces_with_ray_trace(meshes: List[pv.DataSet], ray_length: float = 0.01,
                                        incidence_angle_tolerance: float = 0.01,
@@ -290,6 +290,17 @@ def select_points_in_faces(mesh: pv.PolyData, points: List[int] = None, faces: L
 
 
 def pyvista_faces_by_dimension(faces: NDArray) -> Dict[int, NDArray]:
+    """
+    You can also do this by casting to UnstructuredGrid, where the face types are available in a dict
+
+    Parameters
+    ----------
+    faces
+
+    Returns
+    -------
+
+    """
     output = {}
     i = 0
     while i < len(faces):
@@ -451,7 +462,7 @@ def extract_faces_with_edges(dataset: pv.PolyData, edges: pv.PolyData):
     return faces_using_edges
 
 
-def find_sequence(array, sequence):
+def find_sequence(array, sequence, check_reverse=False):
     """
     Find the start index of a subsequence in an array.
 
@@ -468,11 +479,15 @@ def find_sequence(array, sequence):
     """
     location = -1
     # hstack array so we can find sequences that wrap around
-    array = np.hstack((array, array))
-    for i in range(len(array) - len(sequence) + 1):
-        if np.all(array[i:i + len(sequence)] == sequence):
+    search_array = np.hstack((array, array))
+    for i in range(len(search_array) - len(sequence) + 1):
+        if np.all(search_array[i:i + len(sequence)] == sequence):
             location = i
             break
+
+    if location == -1 and check_reverse:
+        location = find_sequence(array, sequence[::-1], check_reverse=False)
+
     return location
 
 
@@ -649,7 +664,24 @@ def sort_edge(edge, start_node=None):
     return sorted_edge
 
 
-def triangulate_loop(loop):
+def triangulate_loop_with_stitch(loop, points=None):
+    """
+    Triangulate a loop by stitching back and forth accross it.
+    *Note* This algorithm can create self intersecting geometry in loops with concave sections
+
+    Parameters
+    ----------
+    loop
+        List of lines making up the loop to be triangulated. Lines are represented by list of two ints referring to
+        indices in a points array
+    points
+        Array of points representing the 3D coordinates referred to by the elements of the loop.
+        Unused for this algorithm
+
+    Returns
+    -------
+
+    """
     loop = list(zip(*loop))[0]  # Just need to look at the line starts
     faces = [[loop[-1], loop[0], loop[1]]]
     next_up_node = 2  # Already used 2 nodes from start of loop, 1 from end
@@ -667,3 +699,101 @@ def triangulate_loop(loop):
             faces.append([new_node, faces[-1][1], faces[-1][0]])  # on odd iterations, go to adjacent node first
 
     return faces
+
+
+def triangulate_loop_with_nearest_neighbors(loop, points):
+    """
+    Triangulate loop by building triangles using the nearest neighbor point to existing triangle edges.
+    Todo: ensure one side of each triangle is on the boundary (important for 3d boundaries)
+    Parameters
+    ----------
+    loop
+        List of lines making up the loop to be triangulated. Lines are represented by list of two ints referring to
+        indices in a points array
+    points
+        Array of points representing the 3D coordinates referred to by the elements of the loop.
+        Unused for this algorithm
+
+    Returns
+    -------
+
+    """
+    loop = list(zip(*loop))[0]  # Just need to look at where each line starts
+    faces = []
+
+    # Start with a single face consisting of point 0 and its nearest neighbors
+    point_1 = loop[0]
+    neighbors = sorted(loop, key=lambda neighbor: np.linalg.norm(points[point_1] - points[neighbor]))
+    point_2 = neighbors[1]
+    point_3 = neighbors[2]
+    faces.append([point_3, point_2, point_1])
+
+    # Recursively build faces off the first face
+    continue_triangulating_with_nearest_neighbors(faces, loop, points)
+
+    return faces
+
+
+def continue_triangulating_with_nearest_neighbors(faces, loop, points):
+
+    for a, b in itertools.combinations(faces[-1], 2):  # For each combination of points in a face
+        # If the points are adjacent in the loop, they are on the edge and don't need to be built off
+        points_adjacent = find_sequence(loop, [a, b], check_reverse=True) >= 0
+
+        # If the line a,b is already found in two triangles, don't build any more
+        line_in_two_faces = \
+            np.count_nonzero([find_sequence(face, [a, b], check_reverse=True) >= 0 for face in faces]) >= 2
+
+        if not points_adjacent and not line_in_two_faces:
+            # If not, build another triangle with a, b and the nearest neighbor to a, and continue recursively
+            # building triangles
+            point_1 = a
+            point_2 = b
+
+            # Look for neighbors that are not a or b and don't already have a triangle with a
+            searchloop = []
+            for item in loop:
+                if item not in [point_1, point_2]:
+                    line_in_faces_a = [find_sequence(face, [a, item], check_reverse=True) >= 0 for face in faces]
+                    line_in_faces_b = [find_sequence(face, [b, item], check_reverse=True) >= 0 for face in faces]
+
+                    if not np.any(line_in_faces_a) and not np.any(line_in_faces_b):
+                        searchloop.append(item)
+
+            if not searchloop:
+                continue
+
+            neighbors = sorted(searchloop, key=lambda neighbor: np.linalg.norm(points[a] - points[neighbor]))
+            point_3 = neighbors[0]
+            faces.append([point_3, point_2, point_1])
+            continue_triangulating_with_nearest_neighbors(faces, loop, points)
+
+
+
+loop_triangulation_algorithms = {
+    "stitch": triangulate_loop_with_stitch,
+    "nearest_neighbor": triangulate_loop_with_nearest_neighbors
+}
+
+
+def select_intersecting_triangles(mesh: pv.PolyData, quiet=False, *args, **kwargs):
+    """
+    Wrapper around the pymeshfix function for selecting self intersecting triangles
+
+    Parameters
+    ----------
+    mesh
+    quiet
+        Enable or disable verbose output from pymehsfix
+        *NOTE* pymeshfix seems to have this backward. Quiet=True makes it loud. Quiet=False makes it quiet
+    args
+    kwargs
+
+    Returns
+    -------
+
+    """
+    tin = pymeshfix.PyTMesh(quiet)
+    tin.load_array(mesh.points, pyvista_faces_to_2d(mesh.faces))
+    intersecting = tin.select_intersecting_triangles(*args, **kwargs)
+    return intersecting
