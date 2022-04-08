@@ -1,7 +1,8 @@
 from tetrahedralizer.pyvista_tools import remove_shared_faces, select_shared_faces, select_points_in_faces, \
     pyvista_faces_by_dimension, pyvista_faces_to_2d, pyvista_faces_to_1d, select_shared_points, \
     select_faces_using_points, remove_shared_faces_with_ray_trace, find_sequence, extract_faces_with_edges, \
-    find_loops_and_chains, triangulate_loop_with_stitch, triangulate_loop_with_nearest_neighbors, select_intersecting_triangles
+    find_loops_and_chains, triangulate_loop_with_stitch, triangulate_loop_with_nearest_neighbors, \
+    select_intersecting_triangles, dihedral_angle, compute_normal
 
 import numpy as np
 import pyvista as pv
@@ -409,7 +410,7 @@ def test_triangulate_loop():
 def test_triangulate_loop_with_nearest_neighbors_boundary_m():
     points = np.array([[0, 0, 0], [1, 0, 0], [3, 0, 0], [0, 1, 0], [0.5, 1, 0], [1, 0.5, 0], [2, 1, 0], [3, 1, 0]])
     loop = np.array([[1, 2], [2, 7], [7, 6], [6, 5], [5, 4], [4, 3], [3, 0], [0, 1]])
-    correct_faces = [[0, 5, 1], [3, 5, 0], [4, 5, 3], [6, 1, 5], [7, 1, 6], [2, 1, 7]]
+    correct_faces = [[1, 5, 0], [0, 5, 3], [3, 5, 4], [5, 1, 6], [6, 1, 7], [7, 1, 2]]
 
     faces = triangulate_loop_with_nearest_neighbors(loop, points)
 
@@ -426,7 +427,7 @@ def test_triangulate_loop_with_nearest_neighbors_boundary_m():
 def test_triangulate_loop_with_nearest_neighbors_boundary_square():
     points = np.array([[0, 0, 0], [1, 0, 0], [2, 0, 0], [2, 1, 0], [2, 2, 0], [1, 2, 0], [0, 2, 0], [0, 1, 0]])
     loop = np.array([[0, 1], [1, 2], [2, 3], [3, 4], [4, 5], [5, 6], [6, 7], [7, 0]])
-    correct_faces = [[7, 1, 0], [6, 1, 7], [5, 1, 6], [4, 1, 5], [3, 1, 4], [2, 1, 3]]
+    correct_faces = [[0, 1, 7], [7, 1, 6], [6, 1, 5], [5, 1, 4], [4, 1, 3], [3, 1, 2]]
 
     faces = triangulate_loop_with_nearest_neighbors(loop, points)
 
@@ -449,16 +450,28 @@ def test_triangulate_loop_with_nearest_neighbors_boundary_3d():
 
     intersecting_triangles = select_intersecting_triangles(mesh, justproper=True)
 
-    boundary = pv.PolyData(points, lines=pyvista_faces_to_1d(loop))
-    p = pv.Plotter()
-    p.add_mesh(mesh, style="wireframe")
-    p.add_mesh(boundary, color="red")
-    p.show()
+    # boundary = pv.PolyData(points, lines=pyvista_faces_to_1d(loop))
+    # p = pv.Plotter()
+    # p.add_mesh(mesh, style="wireframe")
+    # p.add_mesh(boundary, color="red")
+    # p.show()
 
-    assert intersecting_triangles == []
+    assert np.empty(intersecting_triangles)
 
 
+def test_dihedral_angle():
+    points = np.array([[0, 0, 0], [0, 0, 1], [0, 0.5, 0.5], [0.5, 0, 0.5], [0, -0.5, 0.5], [-0.5, 0, 0.5]])
+    faces = np.array([[0, 1, 2], [0, 1, 3], [0, 1, 4], [0, 1, 5]])
 
+    surface = pv.PolyData(points, pyvista_faces_to_1d(faces))
+    surface.plot_normals(faces=True)
+
+    normals = [compute_normal(points[face]) for face in faces]
+
+    angle_01 = dihedral_angle(normals[0], normals[1])
+    angle_02 = dihedral_angle(normals[0], normals[2])
+    angle_03 = dihedral_angle(normals[0], normals[3])
+    pass
 
 def main():
     p = pv.Plotter()

@@ -456,7 +456,7 @@ def extract_faces_with_edges(dataset: pv.PolyData, edges: pv.PolyData):
     faces_using_edges = []
     for i, face in enumerate(pyvista_faces_to_2d(dataset.faces)):
         for line in pyvista_faces_to_2d(dataset.lines):
-            if find_sequence(face, line) >= 0:
+            if find_sequence(face, line, check_reverse=True) >= 0:
                 faces_using_edges.append(i)
 
     return faces_using_edges
@@ -541,6 +541,13 @@ def compute_triangle_winding_order(a, b, c, normal) -> float:
 
     return agreement
 
+
+def compute_normal(points):
+    if len(points) < 3:
+        raise ValueError("Need at least three points to compute a normal")
+
+    normal = np.cross(points[1]-points[0], points[2]-points[1])
+    return normal
 
 def rewind_face(mesh, face_num, inplace=False):
     """
@@ -704,7 +711,6 @@ def triangulate_loop_with_stitch(loop, points=None):
 def triangulate_loop_with_nearest_neighbors(loop, points):
     """
     Triangulate loop by building triangles using the nearest neighbor point to existing triangle edges.
-    Todo: ensure one side of each triangle is on the boundary (important for 3d boundaries)
     Parameters
     ----------
     loop
@@ -722,11 +728,11 @@ def triangulate_loop_with_nearest_neighbors(loop, points):
     faces = []
 
     # Start with a single face consisting of point 0 and its nearest neighbors
-    point_1 = loop[0]
-    neighbors = sorted(loop, key=lambda neighbor: np.linalg.norm(points[point_1] - points[neighbor]))
-    point_2 = neighbors[1]
-    point_3 = neighbors[2]
-    faces.append([point_3, point_2, point_1])
+    a = loop[0]
+    neighbors = sorted(loop, key=lambda neighbor: np.linalg.norm(points[a] - points[neighbor]))
+    b = neighbors[1]
+    c = neighbors[2]
+    faces.append([a, b, c])
 
     # Recursively build faces off the first face
     continue_triangulating_with_nearest_neighbors(faces, loop, points)
@@ -736,7 +742,9 @@ def triangulate_loop_with_nearest_neighbors(loop, points):
 
 def continue_triangulating_with_nearest_neighbors(faces, loop, points):
 
-    for a, b in itertools.combinations(faces[-1], 2):  # For each combination of points in a face
+    a0, b0, c0 = faces[-1]
+    # Check all lines in latest triangle to recursively build off
+    for a, b in [(c0, b0), (b0, a0), (a0, c0)]:
         # If the points are adjacent in the loop, they are on the edge and don't need to be built off
         points_adjacent = find_sequence(loop, [a, b], check_reverse=True) >= 0
 
@@ -745,29 +753,29 @@ def continue_triangulating_with_nearest_neighbors(faces, loop, points):
             np.count_nonzero([find_sequence(face, [a, b], check_reverse=True) >= 0 for face in faces]) >= 2
 
         if not points_adjacent and not line_in_two_faces:
-            # If not, build another triangle with a, b and the nearest neighbor to a, and continue recursively
-            # building triangles
-            point_1 = a
-            point_2 = b
 
-            # Look for neighbors that are not a or b and don't already have a triangle with a
-            searchloop = []
-            for item in loop:
-                if item not in [point_1, point_2]:
-                    line_in_faces_a = [find_sequence(face, [a, item], check_reverse=True) >= 0 for face in faces]
-                    line_in_faces_b = [find_sequence(face, [b, item], check_reverse=True) >= 0 for face in faces]
+            # Look for neighbors that are not a or b and don't already have a triangle with a or b
+            # But at least one line in the triangle must be in the loop
+            valid_neighbors = []
+            for point in loop:
+                if point not in [a, b]:
+                    line_a_to_point_used = np.any([find_sequence(face, [a, point], check_reverse=True) >= 0 for face in faces])
+                    line_b_to_point_used = np.any([find_sequence(face, [b, point], check_reverse=True) >= 0 for face in faces])
 
-                    if not np.any(line_in_faces_a) and not np.any(line_in_faces_b):
-                        searchloop.append(item)
+                    line_in_loop_a = find_sequence(loop, [a, point], check_reverse=True) >= 0
+                    line_in_loop_b = find_sequence(loop, [b, point], check_reverse=True) >= 0
 
-            if not searchloop:
+                    if not line_a_to_point_used and not line_b_to_point_used:
+                        if line_in_loop_a or line_in_loop_b:
+                            valid_neighbors.append(point)
+
+            if not valid_neighbors:
                 continue
 
-            neighbors = sorted(searchloop, key=lambda neighbor: np.linalg.norm(points[a] - points[neighbor]))
-            point_3 = neighbors[0]
-            faces.append([point_3, point_2, point_1])
+            neighbors = sorted(valid_neighbors, key=lambda neighbor: np.linalg.norm(points[a] - points[neighbor]))
+            c = neighbors[0]
+            faces.append([a, b, c])
             continue_triangulating_with_nearest_neighbors(faces, loop, points)
-
 
 
 loop_triangulation_algorithms = {
@@ -797,3 +805,57 @@ def select_intersecting_triangles(mesh: pv.PolyData, quiet=False, *args, **kwarg
     tin.load_array(mesh.points, pyvista_faces_to_2d(mesh.faces))
     intersecting = tin.select_intersecting_triangles(*args, **kwargs)
     return intersecting
+
+
+def refine_surface(surface: pv.PolyData):
+    """
+    An algorithm to refine a surface mesh by keeping only faces on the outer surface of the mesh, thereby removing
+    any inner walls that would be left by the Pyvista extract surface algorithm.
+
+    Parameters
+    ----------
+    surface
+
+    Returns
+    -------
+
+    """
+    # First: find a face on the outer surface by casting a long ray from the first surface and choosing the last face it
+    # hits
+
+    # Create a dict of neighbors for each face.
+    # - Create a list of unique lines, recording faces using the lines (O(n))
+    #   - For each face, add lines as keys lines dict , add face as value to each line
+    # - For each key in lines dict, add faces as keys to faces dict , with other entries as values (O(n))
+
+    # Starting at the start face, for all lines, if a line has two or more neighbors on it, select the one with the
+    # lowest dihedral angle, then recursively continue checking faces
+
+    # TO calculate the dihedral angle correctly, normals need to be facing away from each other. So we will use normals
+    # Calculated by ensuring the shared edge is wound in the same direction in all faces
+
+    pass
+
+
+def continue_refining_surface(selected_faces, neighbors):
+    pass
+
+
+def dihedral_angle(normal_a, normal_b):
+    """
+    Calculate dihedral angle between two faces
+    Parameters
+    ----------
+    normal_a
+    normal_b
+
+    Returns
+    -------
+
+    """
+    length_product = np.linalg.norm(normal_a) * np.linalg.norm(normal_b)
+    dot_product = np.dot(normal_a, normal_b)
+    cosine = dot_product/length_product
+
+    angle = np.arccos(cosine)
+    return angle
