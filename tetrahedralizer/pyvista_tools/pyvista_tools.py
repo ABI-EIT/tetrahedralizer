@@ -830,7 +830,7 @@ def refine_surface(surface: pv.PolyData, inplace=False):
     r_surface = surface.copy()
 
     # Find a face on the outer surface by casting a long ray from the first surface and choosing the last face it hits
-    stop = r_surface.cell_centers().points[0]
+    stop = r_surface.cell_centers().points[0] - r_surface.face_normals[0]
     b = r_surface.bounds
     distance = np.linalg.norm([b[1] - b[0], b[3] - b[2], b[5] - b[4]])
     start = stop + (r_surface.face_normals[0] * distance)
