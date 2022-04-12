@@ -2,7 +2,7 @@ from tetrahedralizer.pyvista_tools import remove_shared_faces, select_shared_fac
     pyvista_faces_by_dimension, pyvista_faces_to_2d, pyvista_faces_to_1d, select_shared_points, \
     select_faces_using_points, remove_shared_faces_with_ray_trace, find_sequence, extract_faces_with_edges, \
     find_loops_and_chains, triangulate_loop_with_stitch, triangulate_loop_with_nearest_neighbors, \
-    select_intersecting_triangles, dihedral_angle, compute_normal
+    select_intersecting_triangles, dihedral_angle, compute_normal, refine_surface
 
 import numpy as np
 import pyvista as pv
@@ -461,17 +461,43 @@ def test_triangulate_loop_with_nearest_neighbors_boundary_3d():
 
 def test_dihedral_angle():
     points = np.array([[0, 0, 0], [0, 0, 1], [0, 0.5, 0.5], [0.5, 0, 0.5], [0, -0.5, 0.5], [-0.5, 0, 0.5]])
-    faces = np.array([[0, 1, 2], [0, 1, 3], [0, 1, 4], [0, 1, 5]])
-
-    surface = pv.PolyData(points, pyvista_faces_to_1d(faces))
-    surface.plot_normals(faces=True)
-
+    faces = np.array([[0, 1, 2], [0, 1, 5], [0, 1, 4], [0, 1, 3]])
     normals = [compute_normal(points[face]) for face in faces]
+    plane_normal = points[1] - points[0]
 
-    angle_01 = dihedral_angle(normals[0], normals[1])
-    angle_02 = dihedral_angle(normals[0], normals[2])
-    angle_03 = dihedral_angle(normals[0], normals[3])
-    pass
+    # surface = pv.PolyData(points, pyvista_faces_to_1d(faces))
+    # face_points = surface.cell_centers()
+    # face_points["Normals"] = np.array(normals)
+    # arrows = face_points.glyph(orient="Normals", geom=pv.Arrow())
+    # surface["point_labels"] = [f"Point {i}" for i in range(surface.n_points)]
+    # p = pv.Plotter()
+    # p.add_mesh(arrows, color="black")
+    # p.add_mesh(surface, scalars=None, color="White")
+    # p.add_point_labels(surface, "point_labels")
+    # p.add_axes()
+    # p.show()
+
+    angle_01 = dihedral_angle(normals[0], normals[1], plane_normal, degrees=True)
+    angle_02 = dihedral_angle(normals[0], normals[2], plane_normal, degrees=True)
+    angle_03 = dihedral_angle(normals[0], normals[3], plane_normal, degrees=True)
+
+    assert angle_01 == 90
+    assert angle_02 == 180
+    assert angle_03 == 270
+
+
+def test_refine_surface():
+    surface = pv.Box(quads=False)
+    surface.points = np.vstack((surface.points, [0., 0., 0.]))
+    surface.faces = pyvista_faces_to_1d(np.vstack(([0, 1, 8], pyvista_faces_to_2d(surface.faces))))
+    surface_refined = refine_surface(surface)
+
+    # surface.plot(style="wireframe")
+    # surface_refined.plot(style="wireframe")
+
+    assert find_sequence(surface.faces, [0, 1, 8]) == 1
+    assert find_sequence(surface_refined.faces, [0, 1, 8]) == -1
+
 
 def main():
     p = pv.Plotter()

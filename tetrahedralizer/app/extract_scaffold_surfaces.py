@@ -4,14 +4,13 @@ from tkinter import Tk
 from tkinter.filedialog import askopenfilename
 from matplotlib import cm
 import numpy as np
-from tetrahedralizer.pyvista_tools import pyvista_faces_to_2d, extract_faces_with_edges, pyvista_faces_to_1d, \
-    rewind_faces_to_normals, find_loops_and_chains, triangulate_loop_with_stitch, select_intersecting_triangles, \
-    loop_triangulation_algorithms
+from tetrahedralizer.pyvista_tools import pyvista_faces_to_2d, pyvista_faces_to_1d, \
+    rewind_faces_to_normals, select_intersecting_triangles, \
+    refine_surface, fill_holes
 import os
 import pathlib
 import meshio
-from vtkmodules.util.vtkConstants import VTK_HEXAHEDRON, VTK_QUAD
-import itertools
+from vtkmodules.util.vtkConstants import VTK_HEXAHEDRON, VTK_QUAD, VTK_TRIANGLE
 
 """
 App to extract surfaces from an organ scaffold mesh (labelled hexahedral volumetric mesh). These are output in vtk 
@@ -32,20 +31,16 @@ def main():
     Tk().destroy()
 
     mesh = pv.read(filename)
+    # section_surfaces = approach_a(mesh)
 
     section_surfaces = {}
     for section in mesh.cell_data:
         section_cells = pyvista_faces_to_2d(mesh.cells)[mesh.cell_data[section] == 1]
         section_mesh = pv.UnstructuredGrid({VTK_HEXAHEDRON: section_cells}, mesh.points)
         surface = section_mesh.extract_surface()
-
         surface = surface.clean()  # Merges close points. Degenerate quads are turned into tris
-        surface = pv.UnstructuredGrid(surface)  # Convert to UnstructuredGrid to we can extract quads
-        surface = pv.PolyData(surface.points, pyvista_faces_to_1d(surface.cells_dict[VTK_QUAD]))
-        surface = surface.clean()  # Clean again to remove points left from tris
         surface = surface.triangulate()
-        # surface = repeatedly_fill_holes(surface, max_iterations=10, hole_size=1000)  # Fill holes left by tris
-        surface = fill_holes(surface, strategy="nearest_neighbor")
+        surface = refine_surface(surface)
         surface = rewind_faces_to_normals(surface)
         section_surfaces[section] = surface
 
@@ -63,15 +58,6 @@ def main():
     else:
         non_intersecting_indices = np.where(np.logical_not(non_intersecting))[0].astype(str)
         print("Surfaces with intersecting faces: " + ", ".join(non_intersecting_indices))
-
-    # # Plot a surface with its intersecting faces
-    # surface = list(section_surfaces.values())[3]
-    # faces = pyvista_faces_to_2d(surface.faces)[intersecting_faces[3]]
-    # intersecting = pv.PolyData(surface.points, pyvista_faces_to_1d(faces))
-    # p = pv.Plotter()
-    # p.add_mesh(surface)
-    # p.add_mesh(intersecting, style="wireframe", color="red", line_width=2)
-    # p.show()
 
     # Plot input meshes
     cmap = cm.get_cmap("Set1")  # Choose a qualitative colormap to distinguish meshes
@@ -106,65 +92,35 @@ def main():
         m.write(f"{output_directory}/{output_filename}{output_extension}")
 
 
-def repeatedly_fill_holes(mesh: pv.DataSet, max_iterations=10, inplace=False, hole_size=1000, **kwargs):
-    out = mesh.copy()
-    for _ in range(max_iterations):
-        out = out.fill_holes(hole_size=hole_size, **kwargs)
-        if out.is_manifold:
-            break
-
-    if inplace:
-        mesh.overwrite(out)
-    else:
-        return out
-
-
-def fill_holes(mesh: pv.PolyData, strategy: str | callable ="stitch", max_hole_size=None, inplace=False):
-    """
-    Fill holes in a Pyvista PolyData mesh
-
-    Parameters
-    ----------
-    mesh
-    strategy
-    max_hole_size
-    inplace
-
-    Returns
-    -------
-
-    """
-    if isinstance(strategy, str):
-        loop_triangulation_strategy = loop_triangulation_algorithms[strategy]
-    else:
-        loop_triangulation_strategy = strategy
-
-    fill_mesh = mesh.copy()
-    # Extract boundary edges
-    boundaries = fill_mesh.extract_feature_edges(boundary_edges=True, non_manifold_edges=False,
-                                                 feature_edges=False, manifold_edges=False)
-
-    # Find loops
-    loops, _ = find_loops_and_chains(pyvista_faces_to_2d(boundaries.lines))
-    # Triangulate
-    patches = [loop_triangulation_strategy(loop, boundaries.points) for loop in loops]
-
-    patches_surface = pv.PolyData(boundaries.points, pyvista_faces_to_1d(np.array(list(itertools.chain(*patches)))))
-
-    # p = pv.Plotter()
-    # p.add_mesh(patches_surface, style="wireframe")
-    # loops_mesh = pv.PolyData(boundaries.points, lines=pyvista_faces_to_1d(list(itertools.chain(*loops))))
-    # p.add_mesh(loops_mesh, color="red")
-    # p.show()
-
-    fill_mesh = fill_mesh.merge(patches_surface)
-
-    if inplace:
-        mesh.overwrite(fill_mesh)
-    else:
-        return fill_mesh
+def approach_a(mesh):
+    section_surfaces = {}
+    for section in mesh.cell_data:
+        section_cells = pyvista_faces_to_2d(mesh.cells)[mesh.cell_data[section] == 1]
+        section_mesh = pv.UnstructuredGrid({VTK_HEXAHEDRON: section_cells}, mesh.points)
+        surface = section_mesh.extract_surface()
+        surface = surface.clean()  # Merges close points. Degenerate quads are turned into tris
+        surface = pv.UnstructuredGrid(surface)  # Convert to UnstructuredGrid to we can extract quads
+        surface = pv.PolyData(surface.points, pyvista_faces_to_1d(surface.cells_dict[VTK_QUAD]))
+        surface = surface.clean()  # Clean again to remove points left from tris
+        surface = surface.triangulate()
+        # surface = repeatedly_fill_holes(surface, max_iterations=10, hole_size=1000)  # Fill holes left by tris
+        surface = fill_holes(surface, strategy="nearest_neighbor")
+        surface = rewind_faces_to_normals(surface)
+        section_surfaces[section] = surface
+    return section_surfaces
 
 
+def plot_with_non_manifold(mesh: pv.PolyData, title=None):
+    p = pv.Plotter()
+    nm = mesh.extract_feature_edges(feature_edges=False, boundary_edges=False,
+                                    manifold_edges=False, non_manifold_edges=True)
+
+    p.add_mesh(mesh, color="white", style="wireframe", label="Surface Mesh")
+    p.add_mesh(nm, color="red", label="Non-Manifold Edges")
+    p.add_legend()
+    if title is not None:
+        p.add_title(title)
+    p.show()
 
 
 if __name__ == "__main__":
