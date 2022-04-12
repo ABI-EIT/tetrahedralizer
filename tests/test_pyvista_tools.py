@@ -1,6 +1,8 @@
 from tetrahedralizer.pyvista_tools import remove_shared_faces, select_shared_faces, select_points_in_faces, \
     pyvista_faces_by_dimension, pyvista_faces_to_2d, pyvista_faces_to_1d, select_shared_points, \
-    select_faces_using_points, remove_shared_faces_with_ray_trace, find_sequence, extract_faces_with_edges
+    select_faces_using_points, remove_shared_faces_with_ray_trace, find_sequence, extract_faces_with_edges, \
+    find_loops_and_chains, triangulate_loop_with_stitch, triangulate_loop_with_nearest_neighbors, \
+    select_intersecting_triangles, dihedral_angle, compute_normal, refine_surface
 
 import numpy as np
 import pyvista as pv
@@ -371,6 +373,130 @@ def test_find_sequence():
     assert(ab == 0)
     assert(ac == 1)
     assert(ad == -1)
+
+
+def test_find_sequence_reverse():
+    a = [1, 2, 3, 4]
+    b = [2, 1]
+    c = [3, 1]
+
+    abr = find_sequence(a, b, check_reverse=True)
+    acr = find_sequence(a, c, check_reverse=True)
+    assert abr == 0
+    assert acr == -1
+
+
+def test_find_loops_and_chains():
+    lines = [[1, 2], [2, 3], [3, 1], [5, 6], [6, 7]]
+
+    correct_loops = [[(1, 2), (2, 3), (3, 1)]]
+    correct_chains = [[(5, 6), (6, 7)]]
+
+    loops, chains = find_loops_and_chains(lines)
+
+    assert np.array_equal(loops, correct_loops)
+    assert np.array_equal(chains, correct_chains)
+
+
+def test_triangulate_loop():
+    loop = [(1, 2), (2, 3), (3, 4), (4, 5), (5, 6), (6, 7), (7, 8), (8, 1)]
+    correct_faces = [[8, 1, 2], [3, 8, 2], [7, 8, 3], [4, 7, 3], [6, 7, 4], [5, 6, 4]]
+
+    faces = triangulate_loop_with_stitch(loop)
+
+    assert np.array_equal(faces, correct_faces)
+
+
+def test_triangulate_loop_with_nearest_neighbors_boundary_m():
+    points = np.array([[0, 0, 0], [1, 0, 0], [3, 0, 0], [0, 1, 0], [0.5, 1, 0], [1, 0.5, 0], [2, 1, 0], [3, 1, 0]])
+    loop = np.array([[1, 2], [2, 7], [7, 6], [6, 5], [5, 4], [4, 3], [3, 0], [0, 1]])
+    correct_faces = [[1, 5, 0], [0, 5, 3], [3, 5, 4], [5, 1, 6], [6, 1, 7], [7, 1, 2]]
+
+    faces = triangulate_loop_with_nearest_neighbors(loop, points)
+
+    # boundary = pv.PolyData(points, lines=pyvista_faces_to_1d(loop))
+    # mesh = pv.PolyData(boundary.points, pyvista_faces_to_1d(faces))
+    # p = pv.Plotter()
+    # p.add_mesh(mesh, style="wireframe")
+    # p.add_mesh(boundary, color="red")
+    # p.show()
+
+    assert np.array_equal(faces, correct_faces)
+
+
+def test_triangulate_loop_with_nearest_neighbors_boundary_square():
+    points = np.array([[0, 0, 0], [1, 0, 0], [2, 0, 0], [2, 1, 0], [2, 2, 0], [1, 2, 0], [0, 2, 0], [0, 1, 0]])
+    loop = np.array([[0, 1], [1, 2], [2, 3], [3, 4], [4, 5], [5, 6], [6, 7], [7, 0]])
+    correct_faces = [[0, 1, 7], [7, 1, 6], [6, 1, 5], [5, 1, 4], [4, 1, 3], [3, 1, 2]]
+
+    faces = triangulate_loop_with_nearest_neighbors(loop, points)
+
+    # boundary = pv.PolyData(points, lines=pyvista_faces_to_1d(loop))
+    # mesh = pv.PolyData(boundary.points, pyvista_faces_to_1d(faces))
+    # p = pv.Plotter()
+    # p.add_mesh(mesh, style="wireframe")
+    # p.add_mesh(boundary, color="red")
+    # p.show()
+
+    assert np.array_equal(faces, correct_faces)
+
+
+def test_triangulate_loop_with_nearest_neighbors_boundary_3d():
+    points = np.array([[0, 0, 0], [1, 1, 1], [2, 0, 0], [2, 1, 0], [2, 2, 0], [1, 2, 0], [0, 2, 0], [0, 1, 0]])
+    loop = np.array([[0, 1], [1, 2], [2, 3], [3, 4], [4, 5], [5, 6], [6, 7], [7, 0]])
+
+    faces = triangulate_loop_with_nearest_neighbors(loop, points)
+    mesh = pv.PolyData(points, pyvista_faces_to_1d(faces))
+
+    intersecting_triangles = select_intersecting_triangles(mesh, justproper=True)
+
+    # boundary = pv.PolyData(points, lines=pyvista_faces_to_1d(loop))
+    # p = pv.Plotter()
+    # p.add_mesh(mesh, style="wireframe")
+    # p.add_mesh(boundary, color="red")
+    # p.show()
+
+    assert np.empty(intersecting_triangles)
+
+
+def test_dihedral_angle():
+    points = np.array([[0, 0, 0], [0, 0, 1], [0, 0.5, 0.5], [0.5, 0, 0.5], [0, -0.5, 0.5], [-0.5, 0, 0.5]])
+    faces = np.array([[0, 1, 2], [0, 1, 5], [0, 1, 4], [0, 1, 3]])
+    normals = [compute_normal(points[face]) for face in faces]
+    plane_normal = points[1] - points[0]
+
+    # surface = pv.PolyData(points, pyvista_faces_to_1d(faces))
+    # face_points = surface.cell_centers()
+    # face_points["Normals"] = np.array(normals)
+    # arrows = face_points.glyph(orient="Normals", geom=pv.Arrow())
+    # surface["point_labels"] = [f"Point {i}" for i in range(surface.n_points)]
+    # p = pv.Plotter()
+    # p.add_mesh(arrows, color="black")
+    # p.add_mesh(surface, scalars=None, color="White")
+    # p.add_point_labels(surface, "point_labels")
+    # p.add_axes()
+    # p.show()
+
+    angle_01 = dihedral_angle(normals[0], normals[1], plane_normal, degrees=True)
+    angle_02 = dihedral_angle(normals[0], normals[2], plane_normal, degrees=True)
+    angle_03 = dihedral_angle(normals[0], normals[3], plane_normal, degrees=True)
+
+    assert angle_01 == 90
+    assert angle_02 == 180
+    assert angle_03 == 270
+
+
+def test_refine_surface():
+    surface = pv.Box(quads=False)
+    surface.points = np.vstack((surface.points, [0., 0., 0.]))
+    surface.faces = pyvista_faces_to_1d(np.vstack(([0, 1, 8], pyvista_faces_to_2d(surface.faces))))
+    surface_refined = refine_surface(surface)
+
+    # surface.plot(style="wireframe")
+    # surface_refined.plot(style="wireframe")
+
+    assert find_sequence(surface.faces, [0, 1, 8]) == 1
+    assert find_sequence(surface_refined.faces, [0, 1, 8]) == -1
 
 
 def main():

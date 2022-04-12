@@ -269,13 +269,24 @@ def preprocess_and_tetrahedralize(outer_mesh: pv.PolyData, inner_meshes: List[pv
             pyvista_tools.pyvista_tetrahedral_mesh_from_arrays(nodes, elements[1]))
 
     # Combine result
-    meshes = [outer_tetrahedralized, *inner_tetrahedralized]
-    for i, mesh in enumerate(meshes):
-        mesh.cell_data["Scalar"] = np.asarray([i % len(meshes)] * mesh.n_cells)
-    blocks = pv.MultiBlock(meshes)
-    combined = blocks.combine()
+    out_meshes = [outer_tetrahedralized, *inner_tetrahedralized]
+    for i, mesh in enumerate(out_meshes):
+        mesh.cell_data["Scalar"] = np.asarray([i % len(out_meshes)] * mesh.n_cells)
+    blocks = pv.MultiBlock(out_meshes)
+    out_combined = blocks.combine()
 
-    return combined
+    cell_sizes = out_combined.compute_cell_sizes()
+
+    outer_surface_volume = fixed_meshes[0].volume
+    total_cell_volume = sum(cell_sizes["Volume"])
+    mean_cell_volume = np.mean(cell_sizes["Volume"])
+    hole_volume = outer_surface_volume - total_cell_volume
+    hole_volume_percent = (hole_volume/outer_surface_volume)*100
+    hole_volume_in_cells = hole_volume/mean_cell_volume
+
+    print(f"Hole volume: {hole_volume_percent:.4f}% of outer surface, {hole_volume_in_cells:.4f} x mean cell volume")
+
+    return out_combined
 
 
 def union_any_intersecting(meshes: List[Tuple[np.ndarray, np.ndarray]]) -> List[Tuple[np.ndarray, np.ndarray]]:

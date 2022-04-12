@@ -1,19 +1,21 @@
+from __future__ import annotations
 import itertools
-from typing import Union, List, Dict, Tuple
+from typing import List, Dict, Tuple
 
 import numpy as np
 import pyvista
 import vtkmodules.util
-from numpy.typing import NDArray
+from numpy.typing import NDArray, ArrayLike
 import pyvista as pv
 from pyvista import UnstructuredGrid
 from tqdm import tqdm
+import pymeshfix
 
 
 def remove_shared_faces_with_ray_trace(meshes: List[pv.DataSet], ray_length: float = 0.01,
                                        incidence_angle_tolerance: float = 0.01,
-                                       return_removed_faces: bool = False, merge_result=True)\
-                                                            -> Union[List[pv.PolyData], Tuple[List[pv.PolyData], list]]:
+                                       return_removed_faces: bool = False, merge_result=True) \
+        -> List[pv.PolyData] | Tuple[List[pv.PolyData], list]:
     """
 
     Parameters
@@ -40,7 +42,8 @@ def remove_shared_faces_with_ray_trace(meshes: List[pv.DataSet], ray_length: flo
     cells_to_remove = [[] for _ in range(len(meshes))]
     intersection_sets = []
     # Iterate through all permutations with mesh_b shooting rays and mesh_a checking them
-    for (i_a, (mesh_a, _)), (i_b, (mesh_b, mesh_rays_b)) in itertools.permutations(enumerate(zip(meshes, mesh_rays)), 2):
+    for (i_a, (mesh_a, _)), (i_b, (mesh_b, mesh_rays_b)) in itertools.permutations(enumerate(zip(meshes, mesh_rays)),
+                                                                                   2):
         # Check which rays from mesh b hit mesh a
         _, intersection_cells = zip(*[mesh_a.ray_trace(*ray) for ray in mesh_rays_b])
 
@@ -49,7 +52,8 @@ def remove_shared_faces_with_ray_trace(meshes: List[pv.DataSet], ray_length: flo
             # If a ray hit a cell, check the angle of incidence
             if len(intersection_cell) > 0:
                 # Index of intersection_cells refers to cells in mesh_b. The cell itself refers to cells in mesh_a
-                angle_of_indicence = (angle_between(mesh_a.cell_normals[intersection_cell], mesh_b.cell_normals[i]) % (np.pi/2))[0]
+                angle_of_indicence = \
+                    (angle_between(mesh_a.cell_normals[intersection_cell], mesh_b.cell_normals[i]) % (np.pi / 2))[0]
                 if 0.5 * incidence_angle_tolerance > angle_of_indicence > -0.5 * incidence_angle_tolerance:
                     ray_hits.append(i)
 
@@ -122,8 +126,8 @@ def angle_between(v1, v2):
 
 
 def remove_shared_faces(meshes: List[pv.DataSet], tolerance: float = None,
-                        return_removed_faces: bool = False, merge_result=True, progress_bar: bool = False) -> Union[
-        List[pv.PolyData], Tuple[List[pv.PolyData], list]]:
+                        return_removed_faces: bool = False, merge_result=True, progress_bar: bool = False) -> \
+        List[pv.PolyData] | Tuple[List[pv.PolyData], list]:
     """
     Remove faces shared by any two of a list of Pyvista Polydata and merge the result. This is similar to the Pyvista
     boolean union, but works with intersections of zero volume. The meshes can optionally be returned unmerged. The
@@ -157,7 +161,8 @@ def remove_shared_faces(meshes: List[pv.DataSet], tolerance: float = None,
     for (index_a, mesh_a), (index_b, mesh_b) in tqdm(list(itertools.combinations(enumerate(meshes), 2)),
                                                      disable=not progress_bar, desc="Removing Shared Faces"):
         shared_points_kwargs = {"mesh_a": mesh_a, "mesh_b": mesh_b, "tolerance": tolerance}
-        shared_points_a, shared_points_b = select_shared_points(**{k: v for k, v in shared_points_kwargs.items() if v is not None}, progress_bar=progress_bar)
+        shared_points_a, shared_points_b = select_shared_points(
+            **{k: v for k, v in shared_points_kwargs.items() if v is not None}, progress_bar=progress_bar)
 
         mesh_a_faces = select_faces_using_points(mesh_a, shared_points_a)
         mesh_b_faces = select_faces_using_points(mesh_b, shared_points_b)
@@ -286,6 +291,17 @@ def select_points_in_faces(mesh: pv.PolyData, points: List[int] = None, faces: L
 
 
 def pyvista_faces_by_dimension(faces: NDArray) -> Dict[int, NDArray]:
+    """
+    You can also do this by casting to UnstructuredGrid, where the face types are available in a dict
+
+    Parameters
+    ----------
+    faces
+
+    Returns
+    -------
+
+    """
     output = {}
     i = 0
     while i < len(faces):
@@ -293,9 +309,9 @@ def pyvista_faces_by_dimension(faces: NDArray) -> Dict[int, NDArray]:
         num_elems = faces[i]
         # Append padding plus each element to the output dict
         if num_elems in output:
-            output[num_elems] = np.append(output[num_elems], np.array([faces[i+j] for j in range(num_elems+1)]))
+            output[num_elems] = np.append(output[num_elems], np.array([faces[i + j] for j in range(num_elems + 1)]))
         else:
-            output[num_elems] = np.array([faces[i+j] for j in range(num_elems+1)])
+            output[num_elems] = np.array([faces[i + j] for j in range(num_elems + 1)])
         # Increment index to the next padding number
         i += num_elems + 1
     return output
@@ -317,7 +333,7 @@ def pyvista_faces_to_2d(faces: NDArray) -> NDArray:
     2d array of faces
     """
     points_per_face = faces[0]
-    return faces.reshape(-1, points_per_face+1)[:, 1:]
+    return faces.reshape(-1, points_per_face + 1)[:, 1:]
 
 
 def pyvista_faces_to_1d(faces: NDArray) -> NDArray:
@@ -364,7 +380,7 @@ def select_shared_points(mesh_a: pv.PolyData, mesh_b: pv.PolyData, tolerance: fl
     """
     shared_points_a = []
     shared_points_b = []
-    for i_a, point_a in tqdm(list(enumerate(mesh_a.points)), disable= not progress_bar, desc="Selecting Shared Points"):
+    for i_a, point_a in tqdm(list(enumerate(mesh_a.points)), disable=not progress_bar, desc="Selecting Shared Points"):
         for i_b, point_b in enumerate(mesh_b.points):
             # linalg.norm calculates euclidean distance
             if np.linalg.norm(point_a - point_b) <= tolerance:
@@ -404,6 +420,18 @@ def select_faces_using_points(mesh: pv.PolyData, points: list) -> List[int]:
 
 
 def pyvista_tetrahedral_mesh_from_arrays(nodes, tets) -> pyvista.UnstructuredGrid:
+    """
+    Create a Pyvista Unstructured Grid with tetrahedral cells from an array representation of 3xN nodes and 4xM tets
+
+    Parameters
+    ----------
+    nodes
+    tets
+
+    Returns
+    -------
+
+    """
     cell_type = np.hstack([
         np.ones(len(tets)) * vtkmodules.util.vtkConstants.VTK_TETRA
     ])
@@ -412,30 +440,74 @@ def pyvista_tetrahedral_mesh_from_arrays(nodes, tets) -> pyvista.UnstructuredGri
 
 
 def extract_faces_with_edges(dataset: pv.PolyData, edges: pv.PolyData):
+    """
+    Extract all the faces of a Pyvista Polydata object that use a given set of edges
 
+    Parameters
+    ----------
+    dataset
+    edges
+
+    Returns
+    -------
+
+    """
     dataset = dataset.merge(edges)
 
     faces_using_edges = []
     for i, face in enumerate(pyvista_faces_to_2d(dataset.faces)):
         for line in pyvista_faces_to_2d(dataset.lines):
-            if find_sequence(face, line) >= 0:
+            if find_sequence(face, line, check_reverse=True) >= 0:
                 faces_using_edges.append(i)
 
     return faces_using_edges
 
 
-def find_sequence(array, sequence):
+def find_sequence(array, sequence, check_reverse=False):
+    """
+    Find the start index of a subsequence in an array.
+
+    Parameters
+    ----------
+    array
+    sequence
+
+    Returns
+    -------
+    Location
+        -1 represents not found
+
+    """
     location = -1
     # hstack array so we can find sequences that wrap around
-    array = np.hstack((array, array))
-    for i in range(len(array)-len(sequence)+1):
-        if np.all(array[i:i+len(sequence)] == sequence):
+    search_array = np.hstack((array, array))
+    for i in range(len(search_array) - len(sequence) + 1):
+        if np.all(search_array[i:i + len(sequence)] == sequence):
             location = i
             break
+
+    if location == -1 and check_reverse:
+        location = find_sequence(array, sequence[::-1], check_reverse=False)
+
     return location
 
 
-def compute_face_winding_orders(mesh: pv.PolyData):
+def compute_face_winding_orders(mesh: pv.PolyData) -> List[float]:
+    """
+    Compute the face winding orders for an all triangular Pyvista Polydata object with respect to the face normals.
+
+    Parameters
+    ----------
+    mesh
+
+    Returns
+    -------
+    winding_orders:
+        List of float representing winding order. positive numbers represent positive winding direction with respect to
+        the face normal.
+
+
+    """
     if not mesh.is_all_triangles:
         raise ValueError("Mesh must be all triangles")
 
@@ -450,14 +522,49 @@ def compute_face_winding_orders(mesh: pv.PolyData):
     return winding_orders
 
 
-def compute_triangle_winding_order(a, b, c, normal):
+def compute_triangle_winding_order(a, b, c, normal) -> float:
+    """
+    Compute winding order of a single triangle with respect to the normal
+
+    Parameters
+    ----------
+    a
+    b
+    c
+    normal
+
+    Returns
+    -------
+
+    """
     expected_normal = np.cross(b - a, c - b)
     agreement = np.dot(expected_normal, normal)
 
     return agreement
 
 
+def compute_normal(points):
+    if len(points) < 3:
+        raise ValueError("Need at least three points to compute a normal")
+
+    normal = np.cross(points[1] - points[0], points[2] - points[1])
+    return normal
+
+
 def rewind_face(mesh, face_num, inplace=False):
+    """
+    Reverse the winding direction of a single face of a pyvista polydata
+
+    Parameters
+    ----------
+    mesh
+    face_num
+    inplace
+
+    Returns
+    -------
+
+    """
     faces = pyvista_faces_to_2d(mesh.faces)
     face = faces[face_num]
     face = [face[0], *face[-1:0:-1]]  # Start at same point, then reverse the rest of the face nodes
@@ -472,6 +579,18 @@ def rewind_face(mesh, face_num, inplace=False):
 
 
 def rewind_faces_to_normals(mesh, inplace=False):
+    """
+    Re-order the faces of a Pyvista Polydata to match the face normals
+
+    Parameters
+    ----------
+    mesh
+    inplace
+
+    Returns
+    -------
+
+    """
     mesh_c = mesh.copy()
 
     mesh_face_order = compute_face_winding_orders(mesh_c)
@@ -482,3 +601,465 @@ def rewind_faces_to_normals(mesh, inplace=False):
         mesh.faces = mesh_c.faces
     else:
         return mesh_c
+
+
+def find_loops_and_chains(lines: ArrayLike):
+    """
+    Find loops and chains in a list of lines
+
+    Parameters
+    ----------
+    lines: Nx2 ArrayLike
+    """
+    edges = []
+    for line in lines:
+        line_in_loops = [line[0] in itertools.chain(*edge) or line[1] in itertools.chain(*edge) for edge in edges]
+        # If either end of the line is already in a loop, add the line to that loop
+        if np.any(line_in_loops):
+            edges[np.argmax(line_in_loops)].add(tuple(line))
+        # Otherwise, start a new loop
+        else:
+            s = set()
+            s.add(tuple(line))
+            edges.append(s)
+
+    # Before sorting, classify into loops and chains
+    # Loops have all nodes exactly twice. Chains have one line with a unique node 0, and one line with a unique node 1
+    # To sort chains, we need to start with the line with the unique node 0
+    loops = []
+    chains = []
+    for edge in edges:
+        starts, ends = tuple(zip(*edge))
+        if set(starts) == set(ends):
+            # To guarantee consistent behavior, arbitarily set the start node of a loop to the minimum node index
+            loops.append({"start": min(starts), "edge": edge})
+        else:
+            chains.append({"start": list(set(starts) - set(ends))[0], "edge": edge})
+
+    # Sort
+    sorted_loops = [sort_edge(loop["edge"], loop["start"]) for loop in loops]
+    sorted_chains = [sort_edge(chain["edge"], chain["start"]) for chain in chains]
+
+    return sorted_loops, sorted_chains
+
+
+def sort_edge(edge, start_node=None):
+    """
+    Sort an edge represented by a list of 2 Tuples
+
+    Parameters
+    ----------
+    edge
+    start_node
+
+    Returns
+    -------
+
+    """
+    sorted_edge = []
+    edge = list(edge)
+
+    if start_node is not None:
+        start_index = np.argmax([line[0] == start_node for line in edge])
+    else:
+        start_index = 0
+
+    sorted_edge.append(edge.pop(start_index))  # Start with first item
+    for _ in range(len(edge)):
+        # Next item in loop is index where the start of the line is the end of the current line
+        next_index = np.argmax([line[0] == sorted_edge[-1][1] for line in edge])
+        sorted_edge.append(edge.pop(next_index))
+
+    return sorted_edge
+
+
+def triangulate_loop_with_stitch(loop, points=None):
+    """
+    Triangulate a loop by stitching back and forth accross it.
+    *Note* This algorithm can create self intersecting geometry in loops with concave sections
+
+    Parameters
+    ----------
+    loop
+        List of lines making up the loop to be triangulated. Lines are represented by list of two ints referring to
+        indices in a points array
+    points
+        Array of points representing the 3D coordinates referred to by the elements of the loop.
+        Unused for this algorithm
+
+    Returns
+    -------
+
+    """
+    loop = list(zip(*loop))[0]  # Just need to look at the line starts
+    faces = [[loop[-1], loop[0], loop[1]]]
+    next_up_node = 2  # Already used 2 nodes from start of loop, 1 from end
+    next_down_node = -2
+    for i in range(len(loop) - 3):
+        # Next face always starts with the new node
+        # If i is even, count up from 0, if i is odd, count down from -1
+        if i % 2 == 0:
+            new_node = loop[next_up_node]
+            next_up_node += 1
+            faces.append([new_node, faces[-1][0], faces[-1][2]])  # on even iterations, go to opposite node first
+        else:
+            new_node = loop[next_down_node]
+            next_down_node -= 1
+            faces.append([new_node, faces[-1][1], faces[-1][0]])  # on odd iterations, go to adjacent node first
+
+    return faces
+
+
+def triangulate_loop_with_nearest_neighbors(loop, points):
+    """
+    Triangulate loop by building triangles using the nearest neighbor point to existing triangle edges.
+    Parameters
+    ----------
+    loop
+        List of lines making up the loop to be triangulated. Lines are represented by list of two ints referring to
+        indices in a points array
+    points
+        Array of points representing the 3D coordinates referred to by the elements of the loop.
+        Unused for this algorithm
+
+    Returns
+    -------
+
+    """
+    loop = list(zip(*loop))[0]  # Just need to look at where each line starts
+    faces = []
+
+    # Start with a single face consisting of point 0 and its nearest neighbors
+    a = loop[0]
+    neighbors = sorted(loop, key=lambda neighbor: np.linalg.norm(points[a] - points[neighbor]))
+    b = neighbors[1]
+    c = neighbors[2]
+    faces.append([a, b, c])
+
+    # Recursively build faces off the first face
+    continue_triangulating_with_nearest_neighbors(faces, loop, points)
+
+    return faces
+
+
+def continue_triangulating_with_nearest_neighbors(faces, loop, points):
+    a0, b0, c0 = faces[-1]
+    # Check all lines in latest triangle to recursively build off
+    for a, b in [(c0, b0), (b0, a0), (a0, c0)]:
+        # If the points are adjacent in the loop, they are on the edge and don't need to be built off
+        points_adjacent = find_sequence(loop, [a, b], check_reverse=True) >= 0
+
+        # If the line a,b is already found in two triangles, don't build any more
+        line_in_two_faces = \
+            np.count_nonzero([find_sequence(face, [a, b], check_reverse=True) >= 0 for face in faces]) >= 2
+
+        if not points_adjacent and not line_in_two_faces:
+
+            # Look for neighbors that are not a or b and don't already have a triangle with a or b
+            # But at least one line in the triangle must be in the loop
+            valid_neighbors = []
+            for point in loop:
+                if point not in [a, b]:
+                    line_a_to_point_used = np.any(
+                        [find_sequence(face, [a, point], check_reverse=True) >= 0 for face in faces])
+                    line_b_to_point_used = np.any(
+                        [find_sequence(face, [b, point], check_reverse=True) >= 0 for face in faces])
+
+                    line_in_loop_a = find_sequence(loop, [a, point], check_reverse=True) >= 0
+                    line_in_loop_b = find_sequence(loop, [b, point], check_reverse=True) >= 0
+
+                    if not line_a_to_point_used and not line_b_to_point_used:
+                        if line_in_loop_a or line_in_loop_b:
+                            valid_neighbors.append(point)
+
+            if not valid_neighbors:
+                continue
+
+            neighbors = sorted(valid_neighbors, key=lambda neighbor: np.linalg.norm(points[a] - points[neighbor]))
+            c = neighbors[0]
+            faces.append([a, b, c])
+            continue_triangulating_with_nearest_neighbors(faces, loop, points)
+
+
+loop_triangulation_algorithms = {
+    "stitch": triangulate_loop_with_stitch,
+    "nearest_neighbor": triangulate_loop_with_nearest_neighbors
+}
+
+
+def select_intersecting_triangles(mesh: pv.PolyData, quiet=False, *args, **kwargs):
+    """
+    Wrapper around the pymeshfix function for selecting self intersecting triangles
+
+    Parameters
+    ----------
+    mesh
+    quiet
+        Enable or disable verbose output from pymehsfix
+        *NOTE* pymeshfix seems to have this backward. Quiet=True makes it loud. Quiet=False makes it quiet
+    args
+    kwargs
+
+    Returns
+    -------
+
+    """
+    tin = pymeshfix.PyTMesh(quiet)
+    tin.load_array(mesh.points, pyvista_faces_to_2d(mesh.faces))
+    intersecting = tin.select_intersecting_triangles(*args, **kwargs)
+    return intersecting
+
+
+def refine_surface(surface: pv.PolyData, inplace=False):
+    """
+    An algorithm to refine a surface mesh by keeping only faces on the outer surface of the mesh, thereby removing
+    any inner walls that would be left by the Pyvista extract surface algorithm.
+
+    This algorithm starts by identifying a known surface face, then recursively adds connected faces which lie on the
+    surface. This is necessary instead of iterating through each face because the method for determining a surface face
+    on a non-manifold line requires knowledge of another surface face.
+
+    Parameters
+    ----------
+    surface
+
+    Returns
+    -------
+
+    """
+    r_surface = surface.copy()
+
+    # Find a face on the outer surface by casting a long ray from the first surface and choosing the last face it hits
+    stop = r_surface.cell_centers().points[0]
+    b = r_surface.bounds
+    distance = np.linalg.norm([b[1] - b[0], b[3] - b[2], b[5] - b[4]])
+    start = stop + (r_surface.face_normals[0] * distance)
+    _, intersection_cells = r_surface.ray_trace(start, stop, first_point=True)
+    face_a = intersection_cells[0]
+
+    # p = pv.Plotter()
+    # line = pv.Line(start, stop)
+    # p.add_mesh(surface, style="wireframe")
+    # p.add_mesh(line)
+    # p.show()
+
+    # Create a dict of unique lines in the mesh, recording which faces use which lines
+    lines_dict: Dict[Tuple, List] = {}
+    for face_index, face in enumerate(pyvista_faces_to_2d(r_surface.faces)):
+        for (a, b) in itertools.combinations(face, 2):
+            key = (a, b) if (a, b) in lines_dict else (b, a) if (b, a) in lines_dict else None
+            if key:
+                lines_dict[key].append(face_index)
+            else:
+                lines_dict[(a, b)] = [face_index]
+
+    # Create a dict of faces, recording the neighbors of each face on each shared line
+    neighbors_dict: Dict[int, Dict[Tuple, List]] = {}
+    for line, face_list in lines_dict.items():
+        for face_index in face_list:
+            if face_index in neighbors_dict:
+                neighbors_dict[face_index][line] = [f for f in face_list if f is not face_index]
+            else:
+                neighbors_dict[face_index] = {line: [f for f in face_list if f is not face_index]}
+
+    # Recursively select faces which belong to the true surface
+    selected_faces = []
+    continue_refining_surface(r_surface, selected_faces, face_a, neighbors_dict)
+    r_surface.faces = pyvista_faces_to_1d(pyvista_faces_to_2d(r_surface.faces)[selected_faces])
+    r_surface = r_surface.clean()
+
+    if inplace:
+        surface.overwrite(r_surface)
+    else:
+        return r_surface
+
+
+def continue_refining_surface(surface, selected_faces, face, neighbors_dict):
+    """
+    Recursively move through neighbors of a face, selecting which neighbors belong to the true surface of the given
+    surface mesh.
+
+    Parameters
+    ----------
+    surface
+    selected_faces
+    face
+    neighbors_dict
+    """
+    for line in neighbors_dict[face]:
+        neighbor_list = neighbors_dict[face][line]
+        if len(neighbor_list) > 1:
+            if not np.any([neighbor in selected_faces for neighbor in neighbor_list]):
+                chosen_neighbor = choose_surface_face(surface, face, neighbor_list, line)
+                selected_faces.append(chosen_neighbor)
+                continue_refining_surface(surface, selected_faces, chosen_neighbor, neighbors_dict)
+        else:
+            neighbor = neighbor_list[0]
+            if neighbor not in selected_faces:
+                selected_faces.append(neighbor)
+                continue_refining_surface(surface, selected_faces, neighbor, neighbors_dict)
+
+
+def choose_surface_face(surface, known_face, neighbors, shared_line):
+    """
+    Choose which neighbor of a given face on a given shared line must lie on the true surface of the given surface mesh.
+    The neighbor on the true surface is that which has the lowest dihedral angle with the known surface face.
+
+    Parameters
+    ----------
+    surface
+    known_face
+    neighbors
+    shared_line
+
+    Returns
+    -------
+    surface face
+        The neighbor which lies on the true surface
+
+    """
+    face_points = pyvista_faces_to_2d(surface.faces)[known_face]
+    neighbors_points = pyvista_faces_to_2d(surface.faces)[neighbors]
+
+    # Get the shared line in the order it is in the known face
+    if find_sequence(face_points, shared_line, check_reverse=False) == -1:
+        shared_line = shared_line[::-1]
+
+    # Get the shared line vector, also known as the normal to the plane on which the face normals lie
+    shared_line_points = [surface.points[shared_line[0]], surface.points[shared_line[1]]]
+    plane_normal = shared_line_points[1] - shared_line_points[0]
+
+    # Wind the neighbor faces with the opposite handedness to known face (shared line in the same direction) which will
+    # make their calculated normals point away
+    for i, face_points in enumerate(neighbors_points):
+        if find_sequence(face_points, shared_line, check_reverse=False) == -1:
+            neighbors_points[i] = face_points[::-1]
+
+    neighbors_normals = [compute_normal(points_coords) for points_coords in surface.points[neighbors_points]]
+    known_face_normal = surface.face_normals[known_face]
+    neighbors_angles = [dihedral_angle(known_face_normal, neighbor_normal, plane_normal)
+                        for neighbor_normal in neighbors_normals]
+
+    min = np.argmin(neighbors_angles)
+    surface_face = neighbors[min]
+    return surface_face
+
+
+def dihedral_angle(normal_a, normal_b, plane_normal=None, degrees=False):
+    """
+    Calculate dihedral angle between two faces specified by their normal vectors, with 0 < angle < pi. Optionally, an
+    additional normal can be given, defining a plane on which normal_a and normal_b lie. With this information, the
+    dihedral angle can be given as 0 < angle < 2*pi
+
+    Parameters
+    ----------
+    normal_a
+    normal_b
+    plane_normal
+        Vector that is normal to the plane that normal_a and normal_b lie on (it is perpendicular to both). The direction
+        of this vector will be used to determine if the dihedral angle is positive or negative, thus allowing the output
+        to be between 0 and 2pi
+    degrees
+
+    Returns
+    -------
+    angle
+        Dihedral angle in radians (or optionally degrees)
+
+    """
+    length_product = np.linalg.norm(normal_a) * np.linalg.norm(normal_b)
+    dot_product = np.dot(normal_a, normal_b)
+    cosine = dot_product / length_product
+    angle = np.arccos(cosine)
+
+    if plane_normal is not None:
+        cross_product = np.cross(normal_a, normal_b)
+        direction = np.dot(plane_normal, cross_product)
+        if direction < 0:
+            angle = 2 * np.pi - angle
+
+    if degrees:
+        angle = np.rad2deg(angle)
+
+    return angle
+
+
+def repeatedly_fill_holes(mesh: pv.DataSet, max_iterations=10, inplace=False, hole_size=1000, **kwargs):
+    """
+    Repeatedly run the pyvista fill holes function on a dataset
+
+    Parameters
+    ----------
+    mesh
+    max_iterations
+    inplace
+    hole_size
+    kwargs
+
+    Returns
+    -------
+    out
+        Mesh with holes filled
+
+    """
+    out = mesh.copy()
+    for _ in range(max_iterations):
+        out = out.fill_holes(hole_size=hole_size, **kwargs)
+        if out.is_manifold:
+            break
+
+    if inplace:
+        mesh.overwrite(out)
+    else:
+        return out
+
+
+def fill_holes(mesh: pv.PolyData, strategy: str | callable = "stitch", inplace=False):
+    """
+    Fill holes in a Pyvista PolyData mesh using a specified algorithm.
+
+    Todo: add max hole size
+
+    Parameters
+    ----------
+    mesh
+    strategy:
+        Hole filling strategy. Can be a string referring to an algorithm in pyvista_tools.loop_triangulation_algorithms,
+        or a callable implementing the interface of the loop_triangulation_algorithms
+    inplace
+
+    Returns
+    -------
+    fill_mesh
+        Mesh with holes filled
+
+    """
+    if isinstance(strategy, str):
+        loop_triangulation_strategy = loop_triangulation_algorithms[strategy]
+    else:
+        loop_triangulation_strategy = strategy
+
+    fill_mesh = mesh.copy()
+    # Extract boundary edges
+    boundaries = fill_mesh.extract_feature_edges(boundary_edges=True, non_manifold_edges=False,
+                                                 feature_edges=False, manifold_edges=False)
+
+    # Find loops
+    loops, _ = find_loops_and_chains(pyvista_faces_to_2d(boundaries.lines))
+    # Triangulate
+    patches = [loop_triangulation_strategy(loop, boundaries.points) for loop in loops]
+
+    patches_surface = pv.PolyData(boundaries.points, pyvista_faces_to_1d(np.array(list(itertools.chain(*patches)))))
+
+    # p = pv.Plotter()
+    # p.add_mesh(patches_surface, style="wireframe")
+    # loops_mesh = pv.PolyData(boundaries.points, lines=pyvista_faces_to_1d(list(itertools.chain(*loops))))
+    # p.add_mesh(loops_mesh, color="red")
+    # p.show()
+
+    fill_mesh = fill_mesh.merge(patches_surface)
+
+    if inplace:
+        mesh.overwrite(fill_mesh)
+    else:
+        return fill_mesh
