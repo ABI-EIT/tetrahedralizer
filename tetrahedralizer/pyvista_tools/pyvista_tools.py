@@ -1,6 +1,6 @@
 from __future__ import annotations
 import itertools
-from typing import List, Dict, Tuple
+from typing import List, Dict, Tuple, Optional
 
 import numpy as np
 import pyvista
@@ -149,10 +149,11 @@ def remove_shared_faces(meshes: List[pv.DataSet], tolerance: float = None,
 
     Returns
     -------
-    List of pv.Polydata with each set of intersecting input meshes merged into one. Input meshes that don't intersect
-    any other are returned unchanged. Alternatively, a list of non-merged input meshes with shared faces removed.
+    output, (faces_to_remove)
+        List of pv.Polydata with each set of intersecting input meshes merged into one. Input meshes that don't intersect
+        any other are returned unchanged. Alternatively, a list of non-merged input meshes with shared faces removed.
 
-    Optionally, list of faces that were removed.
+        Optionally, list of faces that were removed.
 
     """
     # For each pair:
@@ -317,7 +318,7 @@ def pyvista_faces_by_dimension(faces: NDArray) -> Dict[int, NDArray]:
     return output
 
 
-def pyvista_faces_to_2d(faces: NDArray) -> NDArray:
+def pyvista_faces_to_2d(faces: ArrayLike) -> NDArray:
     """
     Convert pyvista faces from the native 1d array to a 2d array with one face per row. Padding is trimmed.
 
@@ -439,24 +440,28 @@ def pyvista_tetrahedral_mesh_from_arrays(nodes, tets) -> pyvista.UnstructuredGri
     return mesh
 
 
-def extract_faces_with_edges(dataset: pv.PolyData, edges: pv.PolyData):
+def extract_faces_with_edges(mesh: pv.PolyData, edges: pv.PolyData) -> List[int]:
     """
     Extract all the faces of a Pyvista Polydata object that use a given set of edges
 
     Parameters
     ----------
-    dataset
+    mesh
+        Mesh to extract edges from
     edges
+        Edges to use
 
     Returns
     -------
+    faces_using_edges
+        List of faces in mesh that use edges
 
     """
-    dataset = dataset.merge(edges)
+    mesh = mesh.merge(edges)
 
     faces_using_edges = []
-    for i, face in enumerate(pyvista_faces_to_2d(dataset.faces)):
-        for line in pyvista_faces_to_2d(dataset.lines):
+    for i, face in enumerate(pyvista_faces_to_2d(mesh.faces)):
+        for line in pyvista_faces_to_2d(mesh.lines):
             if find_sequence(face, line, check_reverse=True) >= 0:
                 faces_using_edges.append(i)
 
@@ -578,17 +583,21 @@ def rewind_face(mesh, face_num, inplace=False):
         return mesh_out
 
 
-def rewind_faces_to_normals(mesh, inplace=False):
+def rewind_faces_to_normals(mesh: pv.PolyData, inplace=False) -> Optional[pv.PolyData]:
     """
     Re-order the faces of a Pyvista Polydata to match the face normals
 
     Parameters
     ----------
     mesh
+        Mesh to reorder the faces of
     inplace
+        Update mesh inplace
 
     Returns
     -------
+    mesh_c
+        Updated mesh
 
     """
     mesh_c = mesh.copy()
@@ -673,7 +682,7 @@ def sort_edge(edge, start_node=None):
     return sorted_edge
 
 
-def triangulate_loop_with_stitch(loop, points=None):
+def triangulate_loop_with_stitch(loop: ArrayLike[Tuple[int, int]], points: ArrayLike = None) -> List[List[int]]:
     """
     Triangulate a loop by stitching back and forth accross it.
     *Note* This algorithm can create self intersecting geometry in loops with concave sections
@@ -689,6 +698,8 @@ def triangulate_loop_with_stitch(loop, points=None):
 
     Returns
     -------
+    faces
+        List of faces, each represented as a list of three indices to the points array
 
     """
     loop = list(zip(*loop))[0]  # Just need to look at the line starts
@@ -710,9 +721,10 @@ def triangulate_loop_with_stitch(loop, points=None):
     return faces
 
 
-def triangulate_loop_with_nearest_neighbors(loop, points):
+def triangulate_loop_with_nearest_neighbors(loop: ArrayLike[Tuple[int, int]], points: ArrayLike) -> List[List[int]]:
     """
     Triangulate loop by building triangles using the nearest neighbor point to existing triangle edges.
+
     Parameters
     ----------
     loop
@@ -724,6 +736,8 @@ def triangulate_loop_with_nearest_neighbors(loop, points):
 
     Returns
     -------
+    faces
+        List of faces, each represented as a list of three indices to the points array
 
     """
     loop = list(zip(*loop))[0]  # Just need to look at where each line starts
@@ -787,21 +801,26 @@ loop_triangulation_algorithms = {
 }
 
 
-def select_intersecting_triangles(mesh: pv.PolyData, quiet=False, *args, **kwargs):
+def select_intersecting_triangles(mesh: pv.PolyData, quiet=False, *args, **kwargs) -> NDArray[int]:
     """
     Wrapper around the pymeshfix function for selecting self intersecting triangles
 
     Parameters
     ----------
     mesh
+        Mesh to select from
     quiet
         Enable or disable verbose output from pymehsfix
         *NOTE* pymeshfix seems to have this backward. Quiet=True makes it loud. Quiet=False makes it quiet
     args
+        args for PyTMesh.select_intersecting_triangles
     kwargs
+        kwargs for PyTMesh.select_intersecting_Triangles
 
     Returns
     -------
+    intersecting
+        NDArray of intersecting triangles
 
     """
     tin = pymeshfix.PyTMesh(quiet)
@@ -810,7 +829,7 @@ def select_intersecting_triangles(mesh: pv.PolyData, quiet=False, *args, **kwarg
     return intersecting
 
 
-def refine_surface(surface: pv.PolyData, inplace=False):
+def refine_surface(surface: pv.PolyData, inplace=False) -> Optional[pv.PolyData]:
     """
     An algorithm to refine a surface mesh by keeping only faces on the outer surface of the mesh, thereby removing
     any inner walls that would be left by the Pyvista extract surface algorithm.
@@ -822,9 +841,14 @@ def refine_surface(surface: pv.PolyData, inplace=False):
     Parameters
     ----------
     surface
+        Surface to refine
+    inplace
+        Update mesh inplace
 
     Returns
     -------
+    r_surface
+        Refined surface
 
     """
     r_surface = surface.copy()
@@ -984,17 +1008,23 @@ def dihedral_angle(normal_a, normal_b, plane_normal=None, degrees=False):
     return angle
 
 
-def repeatedly_fill_holes(mesh: pv.DataSet, max_iterations=10, inplace=False, hole_size=1000, **kwargs):
+def repeatedly_fill_holes(mesh: pv.DataSet, max_iterations=10, inplace=False, hole_size=1000, **kwargs) \
+        -> Optional[pv.DataSet]:
     """
-    Repeatedly run the pyvista fill holes function on a dataset
+    Repeatedly run the pyvista fill holes function on a dataset.
 
     Parameters
     ----------
     mesh
+        Mesh to fill holes in
     max_iterations
+        Maximum number of times to fill holes
     inplace
+        Update the mesh inplace
     hole_size
+        Hole size argument for pv.DataSet.fill_holes
     kwargs
+        kwargs for pv.Dataset.fill_holes
 
     Returns
     -------
@@ -1014,7 +1044,7 @@ def repeatedly_fill_holes(mesh: pv.DataSet, max_iterations=10, inplace=False, ho
         return out
 
 
-def fill_holes(mesh: pv.PolyData, strategy: str | callable = "stitch", inplace=False):
+def fill_holes(mesh: pv.PolyData, strategy: str | callable = "stitch", inplace=False) -> Optional[pv.PolyData]:
     """
     Fill holes in a Pyvista PolyData mesh using a specified algorithm.
 
@@ -1023,10 +1053,12 @@ def fill_holes(mesh: pv.PolyData, strategy: str | callable = "stitch", inplace=F
     Parameters
     ----------
     mesh
-    strategy:
+        Mesh to fill holes in
+    strategy
         Hole filling strategy. Can be a string referring to an algorithm in pyvista_tools.loop_triangulation_algorithms,
         or a callable implementing the interface of the loop_triangulation_algorithms
     inplace
+        Update mesh inplace
 
     Returns
     -------

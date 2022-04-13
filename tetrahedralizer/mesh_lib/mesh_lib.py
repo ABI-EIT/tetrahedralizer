@@ -1,3 +1,4 @@
+from __future__ import annotations
 import itertools
 from typing import Dict, Tuple, List, Optional
 import gmsh
@@ -174,6 +175,7 @@ def gmsh_tetrahedralize(meshes: List[Tuple[np.ndarray, np.ndarray]], gmsh_option
         Dict of values to be passed to gmsh.option.set_number
     Returns
     -------
+    nodes, elements
         Tetrahedralized mesh. Elements are now represented as a Tuple of ndarray. Element 0 is a 3xN array of surface
         faces. Element 1 is a 4xN array of tetrahedral cells
 
