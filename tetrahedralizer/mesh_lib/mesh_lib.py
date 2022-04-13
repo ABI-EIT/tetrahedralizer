@@ -10,6 +10,8 @@ import pyvista as pv
 import pyvista_tools
 from pyvista_tools import pyvista_faces_to_2d, pyvista_faces_to_1d, remove_shared_faces_with_ray_trace,\
     remove_shared_faces
+import vtk
+from vtk.util import numpy_support
 
 
 def fix_mesh(mesh: pv.DataSet, repair_kwargs: Dict = None) -> Tuple[pv.DataSet, pv.PolyData]:
@@ -404,4 +406,13 @@ def dif_any_intersecting(meshes: List[Tuple[np.ndarray, np.ndarray]]) -> List[Tu
     return diffed_meshes
 
 
+def label_any_mesh(meshes, label):
+    """take in a mesh and a label
+    output the mesh with a label for vtk
+    """
+    scalar3_array = numpy_support.numpy_to_vtk(scalar3)
+    scalar3_array.SetName('scalar3')
+    cell_data.AddArray(scalar3)
 
+
+    return diffed_meshes
