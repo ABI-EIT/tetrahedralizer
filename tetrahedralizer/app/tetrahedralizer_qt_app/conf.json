@@ -4,6 +4,10 @@
   "output_extension": ".vtu",
   "mesh_repair_kwargs": {},
   "gmsh_options": {
-    "Mesh.MeshSizeMax": 10
+    "Mesh.MeshSizeMax": 20,
+
+    "Mesh.OptimizeThreshold" : 0.2
+
+
   }
 }
