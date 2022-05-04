@@ -2,7 +2,8 @@ from tetrahedralizer.pyvista_tools import remove_shared_faces, select_shared_fac
     pyvista_faces_by_dimension, pyvista_faces_to_2d, pyvista_faces_to_1d, select_shared_points, \
     select_faces_using_points, remove_shared_faces_with_ray_trace, find_sequence, extract_faces_with_edges, \
     find_loops_and_chains, triangulate_loop_with_stitch, triangulate_loop_with_nearest_neighbors, \
-    select_intersecting_triangles, dihedral_angle, compute_normal, refine_surface
+    select_intersecting_triangles, dihedral_angle, compute_normal, refine_surface, identify_neighbors, \
+    remove_boundary_edges_recursively
 
 import numpy as np
 import pyvista as pv
@@ -330,7 +331,7 @@ def test_extract_faces_with_edges_flap():
     # p.add_mesh(edges, color="red", label="Boundary Edges", line_width=2)
     # p.show()
 
-    assert(np.array_equal(two_sides, [11]))
+    assert (np.array_equal(two_sides, [11]))
 
 
 # def test_extract_faces_with_edges_non_manifold_plus_flap():
@@ -370,9 +371,9 @@ def test_find_sequence():
     ac = find_sequence(a, c)
     ad = find_sequence(a, d)
 
-    assert(ab == 0)
-    assert(ac == 1)
-    assert(ad == -1)
+    assert (ab == 0)
+    assert (ac == 1)
+    assert (ad == -1)
 
 
 def test_find_sequence_reverse():
@@ -497,6 +498,64 @@ def test_refine_surface():
 
     assert find_sequence(surface.faces, [0, 1, 8]) == 1
     assert find_sequence(surface_refined.faces, [0, 1, 8]) == -1
+
+
+def test_identify_neighbors():
+    surface = pv.Cone(resolution=3)
+    surface.points = np.vstack((surface.points, [0., 0., 0.]))
+    surface.faces = pyvista_faces_to_1d(np.vstack(([0, 1, 4], pyvista_faces_to_2d(surface.faces))))
+
+    correct_neighbors_dict = {0: {(0, 1): [2, 4],
+                                  (0, 4): [],
+                                  (1, 4): []},
+                              2: {(0, 1): [0, 4],
+                                  (2, 1): [1],
+                                  (0, 2): [3]},
+                              4: {(0, 1): [0, 2],
+                                  (3, 1): [1],
+                                  (0, 3): [3]},
+                              1: {(3, 2): [3],
+                                  (3, 1): [4],
+                                  (2, 1): [2]},
+                              3: {(3, 2): [1],
+                                  (0, 2): [2],
+                                  (0, 3): [4]}}
+
+    correct_lines_dict = {(0, 1): [0, 2, 4],
+                          (0, 4): [0],
+                          (1, 4): [0],
+                          (3, 2): [1, 3],
+                          (3, 1): [1, 4],
+                          (2, 1): [1, 2],
+                          (0, 2): [2, 3],
+                          (0, 3): [3, 4]}
+
+    # surface.plot(style="wireframe")
+
+    neighbors_dict, lines_dict = identify_neighbors(surface)
+
+    assert correct_neighbors_dict == neighbors_dict
+    assert correct_lines_dict == lines_dict
+
+
+def test_remove_boundary_edges_recursively():
+    surface = pv.Cone(resolution=3)
+    surface.points = np.vstack((surface.points, [[0., 0., 0.5], [-0.5, 0., 0.5], [0.5, 0., 0.5]]))
+    surface.faces = pyvista_faces_to_1d(
+        np.vstack(([[0, 1, 4], [1, 4, 5], [0, 4, 6]], pyvista_faces_to_2d(surface.faces))))
+
+    correct_faces = np.array([3, 0, 1, 2, 3, 3, 2, 1, 3, 3, 1, 0, 3, 3, 0, 2])
+
+    surface_r = remove_boundary_edges_recursively(surface)
+
+    # p = pv.Plotter()
+    # p.add_mesh(surface, style="wireframe")
+    # p.add_point_labels(surface.points, surface.points.tolist())
+    # p.show()
+    #
+    # surface_r.plot()
+
+    assert np.array_equal(surface_r.faces, correct_faces)
 
 
 def main():

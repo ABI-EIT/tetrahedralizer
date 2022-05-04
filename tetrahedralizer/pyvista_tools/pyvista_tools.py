@@ -867,9 +867,38 @@ def refine_surface(surface: pv.PolyData, inplace=False) -> Optional[pv.PolyData]
     # p.add_mesh(line)
     # p.show()
 
+    neighbors_dict, _ = identify_neighbors(r_surface)
+
+    # Recursively select faces which belong to the true surface
+    selected_faces = []
+    continue_refining_surface(r_surface, selected_faces, face_a, neighbors_dict)
+    r_surface.faces = pyvista_faces_to_1d(pyvista_faces_to_2d(r_surface.faces)[selected_faces])
+    r_surface = r_surface.clean()
+
+    if inplace:
+        surface.overwrite(r_surface)
+    else:
+        return r_surface
+
+
+def identify_neighbors(surface: pv.PolyData) -> Tuple[Dict, Dict]:
+    """
+    Identify neighbors of each face in a surface. Returns a dict of faces with each face's neighbors, grouped by the
+    lines that the faces share. Also returns a dict of lines in the surface with each face that uses each line.
+
+
+    Parameters
+    ----------
+    surface
+
+    Returns
+    -------
+    neighbors_dict, lines_dict
+
+    """
     # Create a dict of unique lines in the mesh, recording which faces use which lines
     lines_dict: Dict[Tuple, List] = {}
-    for face_index, face in enumerate(pyvista_faces_to_2d(r_surface.faces)):
+    for face_index, face in enumerate(pyvista_faces_to_2d(surface.faces)):
         for (a, b) in itertools.combinations(face, 2):
             key = (a, b) if (a, b) in lines_dict else (b, a) if (b, a) in lines_dict else None
             if key:
@@ -886,16 +915,7 @@ def refine_surface(surface: pv.PolyData, inplace=False) -> Optional[pv.PolyData]
             else:
                 neighbors_dict[face_index] = {line: [f for f in face_list if f is not face_index]}
 
-    # Recursively select faces which belong to the true surface
-    selected_faces = []
-    continue_refining_surface(r_surface, selected_faces, face_a, neighbors_dict)
-    r_surface.faces = pyvista_faces_to_1d(pyvista_faces_to_2d(r_surface.faces)[selected_faces])
-    r_surface = r_surface.clean()
-
-    if inplace:
-        surface.overwrite(r_surface)
-    else:
-        return r_surface
+    return neighbors_dict, lines_dict
 
 
 def continue_refining_surface(surface, selected_faces, face, neighbors_dict):
@@ -1095,3 +1115,57 @@ def fill_holes(mesh: pv.PolyData, strategy: str | callable = "stitch", inplace=F
         mesh.overwrite(fill_mesh)
     else:
         return fill_mesh
+
+
+def remove_boundary_edges_recursively(mesh: pv.PolyData, inplace=False) -> Optional[pv.PolyData]:
+    """
+    Remove boundary edges, then re-check for boundary edges and continue removing recursively until no boundary edges
+    remain.
+
+    Parameters
+    ----------
+    mesh
+    inplace
+
+    Returns
+    -------
+    r_mesh
+        Mesh with boundary edges removed
+
+    """
+    r_mesh = mesh.copy()
+
+    neighbors_dict, lines_dict = identify_neighbors(mesh)
+
+    boundary_faces = set()
+    continue_selecting_boundary_edges(neighbors_dict, lines_dict, boundary_faces)
+
+    r_mesh = r_mesh.remove_cells(list(boundary_faces))
+
+    if inplace:
+        mesh.overwrite(r_mesh)
+    else:
+        return r_mesh
+
+
+def continue_selecting_boundary_edges(neighbors_dict, lines_dict, boundary_faces):
+
+    # Find faces that are sole users of a line
+    new_boundary_faces = set()
+    for _, faces in lines_dict.items():
+        if len(faces) == 1:
+            new_boundary_faces.add(faces[0])
+
+    if new_boundary_faces:
+        # Find lines that are used by boundary faces
+        check_lines = {face: list(lines.keys()) for face, lines in neighbors_dict.items() if face in new_boundary_faces}
+
+        # Remove these boundary faces from all lines that use them.
+        for face, lines in check_lines.items():
+            for line in lines:
+                lines_dict[line].remove(face)
+
+        boundary_faces.update(new_boundary_faces)
+
+        continue_selecting_boundary_edges(neighbors_dict, lines_dict, boundary_faces)
+
