@@ -3,7 +3,7 @@ from tetrahedralizer.pyvista_tools import remove_shared_faces, select_shared_fac
     select_faces_using_points, remove_shared_faces_with_ray_trace, find_sequence, extract_faces_with_edges, \
     find_loops_and_chains, triangulate_loop_with_stitch, triangulate_loop_with_nearest_neighbors, \
     select_intersecting_triangles, dihedral_angle, compute_normal, refine_surface, identify_neighbors, \
-    remove_boundary_edges_recursively
+    remove_boundary_faces_recursively, extract_enclosed_regions
 
 import numpy as np
 import pyvista as pv
@@ -538,7 +538,7 @@ def test_identify_neighbors():
     assert correct_lines_dict == lines_dict
 
 
-def test_remove_boundary_edges_recursively():
+def test_remove_boundary_faces_recursively():
     surface = pv.Cone(resolution=3)
     surface.points = np.vstack((surface.points, [[0., 0., 0.5], [-0.5, 0., 0.5], [0.5, 0., 0.5]]))
     surface.faces = pyvista_faces_to_1d(
@@ -546,7 +546,7 @@ def test_remove_boundary_edges_recursively():
 
     correct_faces = np.array([3, 0, 1, 2, 3, 3, 2, 1, 3, 3, 1, 0, 3, 3, 0, 2])
 
-    surface_r = remove_boundary_edges_recursively(surface)
+    surface_r = remove_boundary_faces_recursively(surface)
 
     # p = pv.Plotter()
     # p.add_mesh(surface, style="wireframe")
@@ -557,6 +557,16 @@ def test_remove_boundary_edges_recursively():
 
     assert np.array_equal(surface_r.faces, correct_faces)
 
+def test_extract_enclosed_regions():
+    a = pv.Box(quads=False).translate([-2, 0, 0], inplace=False)
+    b = pv.Box(quads=False)
+    b = b.remove_cells([0, 1])
+    c = a.merge(b)
+
+    # c.plot(style="wireframe")
+
+    regions = extract_enclosed_regions(c)
+    pass
 
 def main():
     p = pv.Plotter()

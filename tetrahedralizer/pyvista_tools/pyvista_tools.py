@@ -468,19 +468,23 @@ def extract_faces_with_edges(mesh: pv.PolyData, edges: pv.PolyData) -> List[int]
     return faces_using_edges
 
 
-def find_sequence(array, sequence, check_reverse=False):
+def find_sequence(array: ArrayLike, sequence: ArrayLike, check_reverse=False) -> int:
     """
     Find the start index of a subsequence in an array.
 
     Parameters
     ----------
     array
+        Array in which to search for sequence
     sequence
+        Sequence to search for
+    check_reverse
+        Also search for the reverse of the sequence. The forward sequence is still given precedence.
 
     Returns
     -------
     Location
-        -1 represents not found
+        Start index of sequnce in array. -1 represents not found.
 
     """
     location = -1
@@ -548,7 +552,21 @@ def compute_triangle_winding_order(a, b, c, normal) -> float:
     return agreement
 
 
-def compute_normal(points):
+def compute_normal(points: ArrayLike) -> np.ndarray:
+    """
+    Compute a vector that is normal to a plane defined by a list of three points
+
+    Parameters
+    ----------
+    points
+        Points defining a plane
+
+    Returns
+    -------
+    normal
+        Vector that is normal to the plane defined by the input points
+
+    """
     if len(points) < 3:
         raise ValueError("Need at least three points to compute a normal")
 
@@ -881,6 +899,32 @@ def refine_surface(surface: pv.PolyData, inplace=False) -> Optional[pv.PolyData]
         return r_surface
 
 
+def continue_refining_surface(surface: pv.PolyData, selected_faces: list, face: int, neighbors_dict: dict):
+    """
+    Recursively move through neighbors of a face, selecting which neighbors belong to the true surface of the given
+    surface mesh.
+
+    Parameters
+    ----------
+    surface
+    selected_faces
+    face
+    neighbors_dict
+    """
+    for line in neighbors_dict[face]:
+        neighbor_list = neighbors_dict[face][line]
+        if len(neighbor_list) > 1:
+            if not np.any([neighbor in selected_faces for neighbor in neighbor_list]):
+                chosen_neighbor = choose_surface_face(surface, face, neighbor_list, line)
+                selected_faces.append(chosen_neighbor)
+                continue_refining_surface(surface, selected_faces, chosen_neighbor, neighbors_dict)
+        else:
+            neighbor = neighbor_list[0]
+            if neighbor not in selected_faces:
+                selected_faces.append(neighbor)
+                continue_refining_surface(surface, selected_faces, neighbor, neighbors_dict)
+
+
 def identify_neighbors(surface: pv.PolyData) -> Tuple[Dict, Dict]:
     """
     Identify neighbors of each face in a surface. Returns a dict of faces with each face's neighbors, grouped by the
@@ -918,48 +962,30 @@ def identify_neighbors(surface: pv.PolyData) -> Tuple[Dict, Dict]:
     return neighbors_dict, lines_dict
 
 
-def continue_refining_surface(surface, selected_faces, face, neighbors_dict):
+def compute_neighbor_angles(surface: pv.PolyData, known_face: int, neighbors: List[int], shared_line: Tuple[int, int]) \
+        -> List[float]:
     """
-    Recursively move through neighbors of a face, selecting which neighbors belong to the true surface of the given
-    surface mesh.
+    Compute the dihedral angles between one face of a surface mesh and its neighbors along a given shared line. The
+    angles are given as 0 < angle < 2*pi, where the positive direction is equivalent to rotation of the known_face
+    in the direction of its normal vector about the shared line.
+
+    Only works on surfaces with all faces having the same number of points. (Since pyvista_faces_to_2d is used)
 
     Parameters
     ----------
     surface
-    selected_faces
-    face
-    neighbors_dict
-    """
-    for line in neighbors_dict[face]:
-        neighbor_list = neighbors_dict[face][line]
-        if len(neighbor_list) > 1:
-            if not np.any([neighbor in selected_faces for neighbor in neighbor_list]):
-                chosen_neighbor = choose_surface_face(surface, face, neighbor_list, line)
-                selected_faces.append(chosen_neighbor)
-                continue_refining_surface(surface, selected_faces, chosen_neighbor, neighbors_dict)
-        else:
-            neighbor = neighbor_list[0]
-            if neighbor not in selected_faces:
-                selected_faces.append(neighbor)
-                continue_refining_surface(surface, selected_faces, neighbor, neighbors_dict)
-
-
-def choose_surface_face(surface, known_face, neighbors, shared_line):
-    """
-    Choose which neighbor of a given face on a given shared line must lie on the true surface of the given surface mesh.
-    The neighbor on the true surface is that which has the lowest dihedral angle with the known surface face.
-
-    Parameters
-    ----------
-    surface
+        Pyvista PolyData representing a surface mesh
     known_face
+        Index of the face in surface that is known to be on the "true" surface
     neighbors
+        List of indices to faces that are neighbors to known_face along a single shared line
     shared_line
+        Tuple of indices to points in surface that represents the shared line between known_face and its neighbors
 
     Returns
     -------
-    surface face
-        The neighbor which lies on the true surface
+    neighbors_angles
+        List of dihedral angles between known_face and neighbors
 
     """
     face_points = pyvista_faces_to_2d(surface.faces)[known_face]
@@ -983,13 +1009,43 @@ def choose_surface_face(surface, known_face, neighbors, shared_line):
     known_face_normal = surface.face_normals[known_face]
     neighbors_angles = [dihedral_angle(known_face_normal, neighbor_normal, plane_normal)
                         for neighbor_normal in neighbors_normals]
+    return neighbors_angles
+
+
+def choose_surface_face(surface: pv.PolyData, known_face: int, neighbors: List[int], shared_line: Tuple[int, int]) \
+        -> int:
+    """
+    Choose which neighbor of a given face on a given shared line must lie on the true surface of the given surface mesh.
+    The neighbor on the true surface is that which has the lowest dihedral angle with the known surface face.
+
+    Only works on surfaces with all faces having the same number of points. (Since pyvista_faces_to_2d is used)
+
+    Parameters
+    ----------
+    surface
+        Pyvista PolyData representing a surface mesh
+    known_face
+        Index of the face in surface that is known to be on the "true" surface
+    neighbors
+        List of indices to faces that are neighbors to known_face along a single shared line
+    shared_line
+        Tuple of indices to points in surface that represents the shared line between known_face and its neighbors
+
+    Returns
+    -------
+    surface face
+        The neighbor which lies on the true surface
+
+    """
+
+    neighbors_angles = compute_neighbor_angles(surface, known_face, neighbors, shared_line)
 
     min = np.argmin(neighbors_angles)
     surface_face = neighbors[min]
     return surface_face
 
 
-def dihedral_angle(normal_a, normal_b, plane_normal=None, degrees=False):
+def dihedral_angle(normal_a: ArrayLike, normal_b: ArrayLike, plane_normal: ArrayLike = None, degrees=False) -> float:
     """
     Calculate dihedral angle between two faces specified by their normal vectors, with 0 < angle < pi. Optionally, an
     additional normal can be given, defining a plane on which normal_a and normal_b lie. With this information, the
@@ -998,12 +1054,15 @@ def dihedral_angle(normal_a, normal_b, plane_normal=None, degrees=False):
     Parameters
     ----------
     normal_a
+        Normal vector A
     normal_b
+        Normal vector B
     plane_normal
         Vector that is normal to the plane that normal_a and normal_b lie on (it is perpendicular to both). The direction
         of this vector will be used to determine if the dihedral angle is positive or negative, thus allowing the output
         to be between 0 and 2pi
     degrees
+        Return the angle in degrees
 
     Returns
     -------
@@ -1117,9 +1176,9 @@ def fill_holes(mesh: pv.PolyData, strategy: str | callable = "stitch", inplace=F
         return fill_mesh
 
 
-def remove_boundary_edges_recursively(mesh: pv.PolyData, inplace=False) -> Optional[pv.PolyData]:
+def remove_boundary_faces_recursively(mesh: pv.PolyData, inplace=False) -> Optional[pv.PolyData]:
     """
-    Remove boundary edges, then re-check for boundary edges and continue removing recursively until no boundary edges
+    Remove boundary faces, then re-check for boundary faces and continue removing recursively until no boundary faces
     remain.
 
     Parameters
@@ -1130,7 +1189,7 @@ def remove_boundary_edges_recursively(mesh: pv.PolyData, inplace=False) -> Optio
     Returns
     -------
     r_mesh
-        Mesh with boundary edges removed
+        Mesh with boundary faces removed
 
     """
     r_mesh = mesh.copy()
@@ -1138,7 +1197,7 @@ def remove_boundary_edges_recursively(mesh: pv.PolyData, inplace=False) -> Optio
     neighbors_dict, lines_dict = identify_neighbors(mesh)
 
     boundary_faces = set()
-    continue_selecting_boundary_edges(neighbors_dict, lines_dict, boundary_faces)
+    continue_selecting_boundary_faces(neighbors_dict, lines_dict, boundary_faces)
 
     r_mesh = r_mesh.remove_cells(list(boundary_faces))
 
@@ -1148,7 +1207,7 @@ def remove_boundary_edges_recursively(mesh: pv.PolyData, inplace=False) -> Optio
         return r_mesh
 
 
-def continue_selecting_boundary_edges(neighbors_dict, lines_dict, boundary_faces):
+def continue_selecting_boundary_faces(neighbors_dict, lines_dict, boundary_faces):
 
     # Find faces that are sole users of a line
     new_boundary_faces = set()
@@ -1167,5 +1226,74 @@ def continue_selecting_boundary_edges(neighbors_dict, lines_dict, boundary_faces
 
         boundary_faces.update(new_boundary_faces)
 
-        continue_selecting_boundary_edges(neighbors_dict, lines_dict, boundary_faces)
+        continue_selecting_boundary_faces(neighbors_dict, lines_dict, boundary_faces)
+
+
+def extract_enclosed_regions(mesh: pv.PolyData) -> List[pv.PolyData]:
+    """
+    Extract enclosed regions from a surface mesh.
+
+    Parameters
+    ----------
+    mesh
+    """
+    mesh = remove_boundary_faces_recursively(mesh)
+    neighbors_dict, _ = identify_neighbors(mesh)
+
+    region_sets = [set()]
+    branch_points = []
+    face = 0
+
+    continue_extracting_enclosed_regions(mesh, face, region_sets, branch_points, neighbors_dict)
+
+    regions = []
+    for region_set in region_sets:
+        faces = pyvista_faces_to_1d(pyvista_faces_to_2d(mesh.face)[region_set])
+        region = pv.PolyData(mesh.points, faces)
+        region = region.clean()  # Remove unused points
+        regions.append(region)
+
+    return regions
+
+
+def continue_extracting_enclosed_regions(mesh, face, region_sets, branch_faces, neighbors_dict):
+
+    # TODO: the problem is that with inner faces, their normal could be in any direction. so we can accidentally
+    # Jump back to the wrong region
+    # Solution: always recalculate the normal for the next face to be "opposing" the one from the current face.
+    # (i.e. both facing outward, the faces would rotate and hit each other instead of chasing each other
+
+    # Add face to the current region set
+    region_sets[-1].add(face)
+
+    # Check all neighbors of the face
+    for line, neighbors in neighbors_dict[face].items():
+        # If there are multiple neighbors sharing a line, choose the inner path, and add the rest to the branch list
+        # so we can go back for them once this set is finished
+        if len(neighbors) > 1:
+            neighbors_angles = compute_neighbor_angles(mesh, face, neighbors, line)
+            sorted_neighbors = [neighbor for _, neighbor in sorted(zip(neighbors_angles, neighbors), reverse=True)]
+            # Neighbor with max angle (with positive defined as outward) is the inner path
+            next_face = sorted_neighbors[0]
+            for neighbor in sorted_neighbors[1:]:
+                if neighbor not in branch_faces:
+                    branch_faces.append(neighbor)
+        else:
+            next_face = neighbors[0]
+
+        # Only continue if the next face is not already in the set
+        if next_face not in region_sets[-1]:
+            continue_extracting_enclosed_regions(mesh, next_face, region_sets,
+                                                 branch_faces, neighbors_dict)
+
+    # Once we finish a set, if we've assigned all faces, we're finished.
+    # If not, we start a new set with the earliest branch
+    all_faces = set(range(0, mesh.n_faces))
+    assigned_faces = set().union(*region_sets)
+    if not all_faces.issubset(assigned_faces):
+        region_sets.append(set())
+        branch_face = branch_faces.pop(0)
+        continue_extracting_enclosed_regions(mesh, branch_face, region_sets, branch_faces, neighbors_dict)
+
+
 
