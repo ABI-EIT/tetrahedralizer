@@ -454,6 +454,8 @@ def identify_neighbors(surface: pv.PolyData) -> Tuple[Dict, Dict]:
     Identify neighbors of each face in a surface. Returns a dict of faces with each face's neighbors, grouped by the
     lines that the faces share. Also returns a dict of lines in the surface with each face that uses each line.
 
+    TODO: only works on triangles because it uses all combinations of points in faces. need to just use sequential points
+     in faces
 
     Parameters
     ----------
@@ -467,7 +469,7 @@ def identify_neighbors(surface: pv.PolyData) -> Tuple[Dict, Dict]:
     # Create a dict of unique lines in the mesh, recording which faces use which lines
     lines_dict: Dict[Tuple, List] = {}
     for face_index, face in enumerate(pyvista_faces_to_2d(surface.faces)):
-        for (a, b) in itertools.combinations(face, 2):
+        for (a, b) in pairwise([*face, face[0]]):
             key = (a, b) if (a, b) in lines_dict else (b, a) if (b, a) in lines_dict else None
             if key:
                 lines_dict[key].append(face_index)
@@ -486,7 +488,18 @@ def identify_neighbors(surface: pv.PolyData) -> Tuple[Dict, Dict]:
     return neighbors_dict, lines_dict
 
 
-def compute_neighbor_angles(surface: pv.PolyData, known_face: int, neighbors: List[int], shared_line: Tuple[int, int]) \
+def pairwise(iterable):
+    """
+    Temporary implementation of itertools.pairwise for compatibility with older versions of python
+    """
+    # pairwise('ABCDEFG') --> AB BC CD DE EF FG
+    a, b = itertools.tee(iterable)
+    next(b, None)
+    return zip(a, b)
+
+
+def compute_neighbor_angles(surface: pv.PolyData, known_face: int, neighbors: List[int], shared_line: Tuple[int, int],
+                            use_winding_order_normal=False) \
         -> List[float]:
     """
     Compute the dihedral angles between one face of a surface mesh and its neighbors along a given shared line. The
@@ -495,8 +508,7 @@ def compute_neighbor_angles(surface: pv.PolyData, known_face: int, neighbors: Li
 
     Only works on surfaces with all faces having the same number of points. (Since pyvista_faces_to_2d is used)
 
-    # TODO: create a non pyvista dependent version where you just give the faces and neighbors as points.
-    #  Normals calculated from points (so the faces have to be wound the correct way first)
+    # TODO: option to use winding order instead of face_normals for known face normal
 
     Parameters
     ----------
@@ -508,6 +520,9 @@ def compute_neighbor_angles(surface: pv.PolyData, known_face: int, neighbors: Li
         List of indices to faces that are neighbors to known_face along a single shared line
     shared_line
         Tuple of indices to points in surface that represents the shared line between known_face and its neighbors
+    use_winding_order_normal
+        use the winding order of the known face to calculate the known face normal instead of the built in normal
+        attribute
 
     Returns
     -------
@@ -533,7 +548,10 @@ def compute_neighbor_angles(surface: pv.PolyData, known_face: int, neighbors: Li
             neighbors_points[i] = face_points[::-1]
 
     neighbors_normals = [compute_normal(points_coords) for points_coords in surface.points[neighbors_points]]
-    known_face_normal = surface.face_normals[known_face]
+    if use_winding_order_normal:
+        known_face_normal = compute_normal(surface.points[face_points])
+    else:
+        known_face_normal = surface.face_normals[known_face]
     neighbors_angles = [dihedral_angle(known_face_normal, neighbor_normal, plane_normal)
                         for neighbor_normal in neighbors_normals]
     return neighbors_angles

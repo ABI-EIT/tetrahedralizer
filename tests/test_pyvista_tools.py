@@ -537,6 +537,32 @@ def test_identify_neighbors():
     assert correct_neighbors_dict == neighbors_dict
     assert correct_lines_dict == lines_dict
 
+def test_identify_neighbors_square():
+    surface = pv.Box()
+    correct_n = {0: {(0, 4): [2], (4, 6): [5], (6, 2): [3], (2, 0): [4]},
+                 2: {(0, 4): [0], (5, 1): [1], (0, 1): [4], (5, 4): [5]},
+                 5: {(4, 6): [0], (7, 5): [1], (5, 4): [2], (6, 7): [3]},
+                 3: {(6, 2): [0], (3, 7): [1], (6, 7): [5], (3, 2): [4]},
+                 4: {(2, 0): [0], (1, 3): [1], (0, 1): [2], (3, 2): [3]},
+                 1: {(5, 1): [2], (1, 3): [4], (3, 7): [3], (7, 5): [5]}}
+
+    correct_l = {(0, 4): [0, 2],
+                 (4, 6): [0, 5],
+                 (6, 2): [0, 3],
+                 (2, 0): [0, 4],
+                 (5, 1): [1, 2],
+                 (1, 3): [1, 4],
+                 (3, 7): [1, 3],
+                 (7, 5): [1, 5],
+                 (0, 1): [2, 4],
+                 (5, 4): [2, 5],
+                 (6, 7): [3, 5],
+                 (3, 2): [3, 4]}
+    n, l = identify_neighbors(surface)
+
+    assert n == correct_n
+    assert l == correct_l
+
 
 def test_remove_boundary_faces_recursively():
     surface = pv.Cone(resolution=3)
@@ -557,16 +583,25 @@ def test_remove_boundary_faces_recursively():
 
     assert np.array_equal(surface_r.faces, correct_faces)
 
-# def test_extract_enclosed_regions():
-#     a = pv.Box(quads=False).translate([-2, 0, 0], inplace=False)
-#     b = pv.Box(quads=False)
-#     b = b.remove_cells([0, 1])
-#     c = a.merge(b)
-#
-#     # c.plot(style="wireframe")
-#
-#     regions = extract_enclosed_regions(c)
-#     pass
+
+def test_extract_enclosed_regions():
+    # a = pv.Box(quads=False).translate([-2, 0, 0], inplace=False)
+    # b = pv.Box(quads=False)
+    # b = b.remove_cells([0, 1])
+    # c = a.merge(b)
+
+    a = pv.Box().translate([-2, 0, 0], inplace=False)
+    b = pv.Box()
+    c = a.merge(b)
+    c = c.remove_cells([1])
+
+    p = pv.Plotter()
+    p.add_mesh(c, style="wireframe")
+    p.add_point_labels(c.cell_centers().points, list(range(c.n_cells)))
+    p.show()
+
+    regions = extract_enclosed_regions(c)
+    pass
 
 def main():
     p = pv.Plotter()

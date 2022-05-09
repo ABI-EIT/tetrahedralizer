@@ -6,7 +6,7 @@ import pyvista
 import vtkmodules.util
 import pyvista as pv
 from tqdm import tqdm
-from tetrahedralizer.pyvista_tools.geometry_tools import find_loops_and_chains, dihedral_angle
+from tetrahedralizer.pyvista_tools.geometry_tools import find_loops_and_chains, dihedral_angle, find_sequence
 from tetrahedralizer.pyvista_tools import select_faces_using_points, select_shared_points, pyvista_faces_to_1d, \
     compute_face_agreement_with_normals, rewind_face, identify_neighbors, pyvista_faces_to_2d, choose_surface_face, \
     loop_triangulation_algorithms, compute_neighbor_angles
@@ -509,10 +509,16 @@ def continue_extracting_enclosed_regions(mesh, face, region_sets, branch_faces, 
 
     # Check all neighbors of the face
     for line, neighbors in neighbors_dict[face].items():
+        # Update winding for all neighbors. Note: we could also do this after selecting the next face, but then we'd
+        # have to do it when branching too, and we'd have to remember which neighbor we got to the branch from.
+        for neighbor in neighbors:
+            if find_sequence(pyvista_faces_to_2d(mesh.faces)[neighbor], line, check_reverse=False) == -1:
+                rewind_face(mesh, neighbor)
+
         # If there are multiple neighbors sharing a line, choose the inner path, and add the rest to the branch list
         # so we can go back for them once this set is finished
         if len(neighbors) > 1:
-            neighbors_angles = compute_neighbor_angles(mesh, face, neighbors, line)
+            neighbors_angles = compute_neighbor_angles(mesh, face, neighbors, line, use_winding_order_normal=True)
             sorted_neighbors = [neighbor for _, neighbor in sorted(zip(neighbors_angles, neighbors), reverse=True)]
             # Neighbor with max angle (with positive defined as outward) is the inner path
             next_face = sorted_neighbors[0]

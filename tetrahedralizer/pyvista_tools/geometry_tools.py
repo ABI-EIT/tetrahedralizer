@@ -157,28 +157,6 @@ def sort_edge(edge: ArrayLike, start_node=None) -> ArrayLike:
     return sorted_edge
 
 
-def rewind_face_to_normal(face: ArrayLike, normal: ArrayLike) -> ArrayLike:
-    """
-    Re-order the points of a face (if necessary) such that the normal calculated using compute_normal will point in the
-    same way as the given normal.
-
-    TODO: finish this
-
-    Parameters
-    ----------
-    face
-        Face of a mesh, defined as a list of coordinates
-    normal
-        Normal vector associated with face
-
-    Returns
-    -------
-    rewound_face
-        Face with the order of the coordinates reversed if necessary in order to make the output of compute_normal
-        point in the same direction as the input normal
-    """
-
-
 def dihedral_angle(normal_a: ArrayLike, normal_b: ArrayLike, plane_normal: ArrayLike = None, degrees=False) -> float:
     """
     Calculate dihedral angle between two faces specified by their normal vectors, with 0 < angle < pi. Optionally, an
