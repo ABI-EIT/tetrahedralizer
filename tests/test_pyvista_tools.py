@@ -1,8 +1,8 @@
-from tetrahedralizer.pyvista_tools import remove_shared_faces, select_shared_faces, select_points_in_faces, \
+from tetrahedralizer.pyvista_tools import remove_shared_faces, select_shared_faces, select_points_used_by_faces, \
     pyvista_faces_by_dimension, pyvista_faces_to_2d, pyvista_faces_to_1d, select_shared_points, \
-    select_faces_using_points, remove_shared_faces_with_ray_trace, find_sequence, extract_faces_with_edges, \
+    select_faces_using_points, remove_shared_faces_with_ray_trace, find_sequence, select_faces_using_edges, \
     find_loops_and_chains, triangulate_loop_with_stitch, triangulate_loop_with_nearest_neighbors, \
-    select_intersecting_triangles, dihedral_angle, compute_normal, refine_surface, identify_neighbors, \
+    select_intersecting_triangles, dihedral_angle, compute_normal, extract_outer_surface, identify_neighbors, \
     remove_boundary_faces_recursively, extract_enclosed_regions
 
 import numpy as np
@@ -109,7 +109,7 @@ def test_select_points_in_faces():
     test_points = [0, 1, 2, 3, 8]
     test_faces = [12, 13, 14, 15]
 
-    points_in_test_faces = select_points_in_faces(mesh_a, test_points, test_faces, exclusive=True)
+    points_in_test_faces = select_points_used_by_faces(mesh_a, test_points, test_faces, exclusive=True)
 
     assert np.array_equal(points_in_test_faces, exclusive_points)
 
@@ -272,7 +272,7 @@ def test_extract_faces_edges_lines():
     edges = b.extract_feature_edges(boundary_edges=True, non_manifold_edges=False,
                                     feature_edges=False, manifold_edges=False)
 
-    faces = extract_faces_with_edges(b, edges)
+    faces = select_faces_using_edges(b, edges)
 
     # b["points"] = np.array((range(0, len(b.points))))
     # p = pv.Plotter()
@@ -289,7 +289,7 @@ def test_extract_faces_with_edges_duplicates():
     edges = b.extract_feature_edges(boundary_edges=True, non_manifold_edges=False,
                                     feature_edges=False, manifold_edges=False)
 
-    faces = extract_faces_with_edges(b, edges)
+    faces = select_faces_using_edges(b, edges)
 
     # b["points"] = np.array((range(0, len(b.points))))
     # p = pv.Plotter()
@@ -311,7 +311,7 @@ def test_extract_faces_with_edges_flap():
     edges = b.extract_feature_edges(boundary_edges=True, non_manifold_edges=False,
                                     feature_edges=False, manifold_edges=False)
 
-    faces = extract_faces_with_edges(b, edges)
+    faces = select_faces_using_edges(b, edges)
     two_sides = [item for item, count in collections.Counter(faces).items() if count > 1]
 
     # b["points"] = np.array((range(0, len(b.points))))
@@ -491,7 +491,7 @@ def test_refine_surface():
     surface = pv.Box(quads=False)
     surface.points = np.vstack((surface.points, [0., 0., 0.]))
     surface.faces = pyvista_faces_to_1d(np.vstack(([0, 1, 8], pyvista_faces_to_2d(surface.faces))))
-    surface_refined = refine_surface(surface)
+    surface_refined = extract_outer_surface(surface)
 
     # surface.plot(style="wireframe")
     # surface_refined.plot(style="wireframe")
@@ -557,16 +557,16 @@ def test_remove_boundary_faces_recursively():
 
     assert np.array_equal(surface_r.faces, correct_faces)
 
-def test_extract_enclosed_regions():
-    a = pv.Box(quads=False).translate([-2, 0, 0], inplace=False)
-    b = pv.Box(quads=False)
-    b = b.remove_cells([0, 1])
-    c = a.merge(b)
-
-    # c.plot(style="wireframe")
-
-    regions = extract_enclosed_regions(c)
-    pass
+# def test_extract_enclosed_regions():
+#     a = pv.Box(quads=False).translate([-2, 0, 0], inplace=False)
+#     b = pv.Box(quads=False)
+#     b = b.remove_cells([0, 1])
+#     c = a.merge(b)
+#
+#     # c.plot(style="wireframe")
+#
+#     regions = extract_enclosed_regions(c)
+#     pass
 
 def main():
     p = pv.Plotter()

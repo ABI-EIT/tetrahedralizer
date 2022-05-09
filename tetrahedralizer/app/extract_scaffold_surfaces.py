@@ -6,7 +6,7 @@ from matplotlib import cm
 import numpy as np
 from tetrahedralizer.pyvista_tools import pyvista_faces_to_2d, pyvista_faces_to_1d, \
     rewind_faces_to_normals, select_intersecting_triangles, \
-    refine_surface, fill_holes
+    extract_outer_surface, fill_holes_with_strategy
 import os
 import pathlib
 import meshio
@@ -40,7 +40,7 @@ def main():
         surface = section_mesh.extract_surface()
         surface = surface.clean()  # Merges close points. Degenerate quads are turned into tris
         surface = surface.triangulate()
-        surface = refine_surface(surface)
+        surface = extract_outer_surface(surface)
         surface = rewind_faces_to_normals(surface)
         section_surfaces[section] = surface
 
@@ -104,7 +104,7 @@ def approach_a(mesh):
         surface = surface.clean()  # Clean again to remove points left from tris
         surface = surface.triangulate()
         # surface = repeatedly_fill_holes(surface, max_iterations=10, hole_size=1000)  # Fill holes left by tris
-        surface = fill_holes(surface, strategy="nearest_neighbor")
+        surface = fill_holes_with_strategy(surface, strategy="nearest_neighbor")
         surface = rewind_faces_to_normals(surface)
         section_surfaces[section] = surface
     return section_surfaces
