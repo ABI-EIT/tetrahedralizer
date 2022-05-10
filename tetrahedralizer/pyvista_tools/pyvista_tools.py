@@ -275,9 +275,11 @@ def compute_face_agreement_with_normals(mesh: pv.PolyData) -> List[bool]:
     return agreements
 
 
-def rewind_face(mesh, face_num, inplace=False):
+def rewind_face(mesh, face_num):
     """
     Reverse the winding direction of a single face of a pyvista polydata
+
+    Note: this operates inplace
 
     Parameters
     ----------
@@ -289,17 +291,37 @@ def rewind_face(mesh, face_num, inplace=False):
     -------
 
     """
+
     faces = pyvista_faces_to_2d(mesh.faces)
     face = faces[face_num]
     face = [face[0], *face[-1:0:-1]]  # Start at same point, then reverse the rest of the face nodes
     faces[face_num] = face
+    mesh.faces = pyvista_faces_to_1d(faces)
 
-    if inplace:
-        mesh.faces = pyvista_faces_to_1d(faces)
+
+def rewind_neighbor(mesh: pv.PolyData, face: int, neighbor: int, shared_line: Tuple[int, int], wind_opposite=True):
+    """
+    Rewind a face's neighbor such that the neighbor has opposite handedness.
+
+    Parameters
+    ----------
+    mesh
+    face
+    neighbor
+    shared_line
+    wind_opposite
+    """
+    if find_sequence(pyvista_faces_to_2d(mesh.faces)[face], shared_line, check_reverse=False) == -1:
+        oriented_line = shared_line[::-1]
     else:
-        mesh_out = mesh.copy()
-        mesh_out.faces = pyvista_faces_to_1d(faces)
-        return mesh_out
+        oriented_line = shared_line
+
+    if find_sequence(pyvista_faces_to_2d(mesh.faces)[neighbor], oriented_line, check_reverse=False) == -1:
+        if wind_opposite:
+            rewind_face(mesh, neighbor)
+    else:
+        if not wind_opposite:
+            rewind_face(mesh, neighbor)
 
 
 def triangulate_loop_with_stitch(loop: ArrayLike[Tuple[int, int]], points: ArrayLike = None) -> List[List[int]]:
@@ -508,8 +530,6 @@ def compute_neighbor_angles(surface: pv.PolyData, known_face: int, neighbors: Li
 
     Only works on surfaces with all faces having the same number of points. (Since pyvista_faces_to_2d is used)
 
-    # TODO: option to use winding order instead of face_normals for known face normal
-
     Parameters
     ----------
     surface
@@ -530,28 +550,30 @@ def compute_neighbor_angles(surface: pv.PolyData, known_face: int, neighbors: Li
         List of dihedral angles between known_face and neighbors
 
     """
-    face_points = pyvista_faces_to_2d(surface.faces)[known_face]
-    neighbors_points = pyvista_faces_to_2d(surface.faces)[neighbors]
+    surface_c = surface.copy()
+
+    face_points = pyvista_faces_to_2d(surface_c.faces)[known_face]
+    neighbors_points = pyvista_faces_to_2d(surface_c.faces)[neighbors]
 
     # Get the shared line in the order it is in the known face
     if find_sequence(face_points, shared_line, check_reverse=False) == -1:
         shared_line = shared_line[::-1]
 
     # Get the shared line vector, also known as the normal to the plane on which the face normals lie
-    shared_line_points = [surface.points[shared_line[0]], surface.points[shared_line[1]]]
+    shared_line_points = [surface_c.points[shared_line[0]], surface_c.points[shared_line[1]]]
     plane_normal = shared_line_points[1] - shared_line_points[0]
 
     # Wind the neighbor faces with the opposite handedness to known face (shared line in the same direction) which will
     # make their calculated normals point away
-    for i, face_points in enumerate(neighbors_points):
-        if find_sequence(face_points, shared_line, check_reverse=False) == -1:
-            neighbors_points[i] = face_points[::-1]
+    for i, neighbor_face_points in enumerate(neighbors_points):
+        if find_sequence(neighbor_face_points, shared_line, check_reverse=False) == -1:
+            neighbors_points[i] = neighbor_face_points[::-1]
 
-    neighbors_normals = [compute_normal(points_coords) for points_coords in surface.points[neighbors_points]]
+    neighbors_normals = [compute_normal(points_coords) for points_coords in surface_c.points[neighbors_points]]
     if use_winding_order_normal:
-        known_face_normal = compute_normal(surface.points[face_points])
+        known_face_normal = compute_normal(surface_c.points[face_points])
     else:
-        known_face_normal = surface.face_normals[known_face]
+        known_face_normal = surface_c.face_normals[known_face]
     neighbors_angles = [dihedral_angle(known_face_normal, neighbor_normal, plane_normal)
                         for neighbor_normal in neighbors_normals]
     return neighbors_angles

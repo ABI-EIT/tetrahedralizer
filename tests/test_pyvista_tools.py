@@ -3,9 +3,11 @@ from tetrahedralizer.pyvista_tools import remove_shared_faces, select_shared_fac
     select_faces_using_points, remove_shared_faces_with_ray_trace, find_sequence, select_faces_using_edges, \
     find_loops_and_chains, triangulate_loop_with_stitch, triangulate_loop_with_nearest_neighbors, \
     select_intersecting_triangles, dihedral_angle, compute_normal, extract_outer_surface, identify_neighbors, \
-    remove_boundary_faces_recursively, extract_enclosed_regions
+    remove_boundary_faces_recursively, extract_enclosed_regions, compute_neighbor_angles, rewind_face, \
+    rewind_neighbor
 
 import numpy as np
+import numpy.testing
 import pyvista as pv
 import collections
 from matplotlib import cm
@@ -505,30 +507,22 @@ def test_identify_neighbors():
     surface.points = np.vstack((surface.points, [0., 0., 0.]))
     surface.faces = pyvista_faces_to_1d(np.vstack(([0, 1, 4], pyvista_faces_to_2d(surface.faces))))
 
-    correct_neighbors_dict = {0: {(0, 1): [2, 4],
-                                  (0, 4): [],
-                                  (1, 4): []},
-                              2: {(0, 1): [0, 4],
-                                  (2, 1): [1],
-                                  (0, 2): [3]},
-                              4: {(0, 1): [0, 2],
-                                  (3, 1): [1],
-                                  (0, 3): [3]},
-                              1: {(3, 2): [3],
-                                  (3, 1): [4],
-                                  (2, 1): [2]},
-                              3: {(3, 2): [1],
-                                  (0, 2): [2],
-                                  (0, 3): [4]}}
+    correct_neighbors_dict = {0: {(0, 1): [2, 4], (1, 4): [], (4, 0): []},
+                             2: {(0, 1): [0, 4], (2, 1): [1], (2, 0): [3]},
+                             4: {(0, 1): [0, 2], (1, 3): [1], (3, 0): [3]},
+                             1: {(3, 2): [3], (2, 1): [2], (1, 3): [4]},
+                             3: {(3, 2): [1], (2, 0): [2], (3, 0): [4]}}
+
 
     correct_lines_dict = {(0, 1): [0, 2, 4],
-                          (0, 4): [0],
                           (1, 4): [0],
+                          (4, 0): [0],
                           (3, 2): [1, 3],
-                          (3, 1): [1, 4],
                           (2, 1): [1, 2],
-                          (0, 2): [2, 3],
-                          (0, 3): [3, 4]}
+                          (1, 3): [1, 4],
+                          (2, 0): [2, 3],
+                          (3, 0): [3, 4]}
+
 
     # surface.plot(style="wireframe")
 
@@ -536,6 +530,70 @@ def test_identify_neighbors():
 
     assert correct_neighbors_dict == neighbors_dict
     assert correct_lines_dict == lines_dict
+
+
+def test_rewind_face():
+    surface = pv.Box()
+
+    correct_original_face = [0, 4, 6, 2]
+    correct_rewound_face = [0, 2, 6, 4]
+
+    faces = pyvista_faces_to_2d(surface.faces)
+    face_0_original = np.copy(faces[0])
+    rewind_face(surface, 0)
+    face_0_new = faces[0]
+
+    np.testing.assert_array_equal(correct_original_face, face_0_original)
+    np.testing.assert_array_equal(correct_rewound_face, face_0_new)
+
+
+def test_rewind_neighbor():
+    surface = pv.Box()
+
+    face_2 = np.copy(pyvista_faces_to_2d(surface.faces)[2])
+
+    rewind_neighbor(surface, 0, 2, (0, 4), wind_opposite=False)
+    face_2_not_rewound = np.copy(pyvista_faces_to_2d(surface.faces)[2])
+
+    rewind_neighbor(surface, 0, 2, (0, 4))
+    face_2_rewound = np.copy(pyvista_faces_to_2d(surface.faces)[2])
+
+    correct_face_2 = [0, 1, 5, 4]
+    correct_face_2_not_rewound = [0, 1, 5, 4]
+    correct_face_2_rewound = [0, 4, 5, 1]
+
+    np.testing.assert_array_equal(face_2, correct_face_2)
+    np.testing.assert_array_equal(face_2_not_rewound, correct_face_2_not_rewound)
+    np.testing.assert_array_equal(face_2_rewound, correct_face_2_rewound)
+
+
+def test_compute_neighbor_angles_box():
+    surface = pv.Box()
+    surface.faces = pyvista_faces_to_1d(np.vstack((pyvista_faces_to_2d(surface.faces), [0,4,7,3])))
+
+    box_outer_angle = 2*np.pi*(3/4)
+    box_angle_to_inner = 2*np.pi*(7/8)
+
+    # p = pv.Plotter()
+    # p.add_mesh(surface, style="wireframe")
+    # p.add_point_labels(surface.cell_centers().points, list(range(surface.n_cells)))
+    # p.add_point_labels(surface.points, list(range(surface.n_points)))
+    # p.show()
+
+    neighbor_angles = compute_neighbor_angles(surface, known_face=0, neighbors=[2, 6], shared_line=(0, 4))
+    np.testing.assert_almost_equal(neighbor_angles[0], box_outer_angle)
+    np.testing.assert_almost_equal(neighbor_angles[1], box_angle_to_inner)
+
+    rewind_face(surface, 0)
+    box_outer_angle_rewound = 2*np.pi*(1/4)
+    box_inner_angle_rewound = 2*np.pi*(1/8)
+
+    neighbor_angles_rewound = compute_neighbor_angles(surface, known_face=0, neighbors=[2, 6], shared_line=(0, 4),
+                                                      use_winding_order_normal=True)
+
+    np.testing.assert_almost_equal(neighbor_angles_rewound[0], box_outer_angle_rewound)
+    np.testing.assert_almost_equal(neighbor_angles_rewound[1], box_inner_angle_rewound)
+
 
 def test_identify_neighbors_square():
     surface = pv.Box()
@@ -595,13 +653,39 @@ def test_extract_enclosed_regions():
     c = a.merge(b)
     c = c.remove_cells([1])
 
-    p = pv.Plotter()
-    p.add_mesh(c, style="wireframe")
-    p.add_point_labels(c.cell_centers().points, list(range(c.n_cells)))
-    p.show()
+    # p = pv.Plotter()
+    # p.add_mesh(c, style="wireframe")
+    # p.add_point_labels(c.cell_centers().points, list(range(c.n_cells)))
+    # p.show()
 
     regions = extract_enclosed_regions(c)
-    pass
+
+    # p = pv.Plotter()
+    # p.add_mesh(regions[0], style="wireframe", color="red")
+    # p.add_mesh(regions[1], style="wireframe", color="blue")
+    # p.show()
+
+    region_0_correct_points = np.array([[-3., -1., -1.],
+                              [-3., -1., 1.],
+                              [-3., 1., 1.],
+                              [-3., 1., -1.],
+                              [-1., -1., -1.],
+                              [-1., -1., 1.],
+                              [-1., 1., 1.],
+                              [-1., 1., -1.]])
+
+    region_1_correct_points = np.array([[-1., -1., -1.],
+                               [-1., -1., 1.],
+                               [-1., 1., 1.],
+                               [-1., 1., -1.],
+                               [1., -1., 1.],
+                               [1., -1., -1.],
+                               [1., 1., -1.],
+                               [1., 1., 1.]])
+
+    assert np.array_equal(regions[0].points, region_0_correct_points)
+    assert np.array_equal(regions[1].points, region_1_correct_points)
+
 
 def main():
     p = pv.Plotter()

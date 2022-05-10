@@ -9,7 +9,7 @@ from tqdm import tqdm
 from tetrahedralizer.pyvista_tools.geometry_tools import find_loops_and_chains, dihedral_angle, find_sequence
 from tetrahedralizer.pyvista_tools import select_faces_using_points, select_shared_points, pyvista_faces_to_1d, \
     compute_face_agreement_with_normals, rewind_face, identify_neighbors, pyvista_faces_to_2d, choose_surface_face, \
-    loop_triangulation_algorithms, compute_neighbor_angles
+    loop_triangulation_algorithms, compute_neighbor_angles, rewind_neighbor
 
 """
 pyvista_features is a module that provides high level features for working with pyvista objects. These features should
@@ -244,7 +244,7 @@ def rewind_faces_to_normals(mesh: pv.PolyData, inplace=False) -> Optional[pv.Pol
     agreements = compute_face_agreement_with_normals(mesh_c)
     for i in range(mesh.n_faces):
         if not agreements[i]:
-            mesh_c = rewind_face(mesh_c, i)
+            rewind_face(mesh_c, i)
 
     if inplace:
         mesh.faces = mesh_c.faces
@@ -475,6 +475,8 @@ def extract_enclosed_regions(mesh: pv.PolyData) -> List[pv.PolyData]:
     """
     Extract enclosed regions from a surface mesh.
 
+    Todo: start with known outside face
+
     Parameters
     ----------
     mesh
@@ -486,11 +488,11 @@ def extract_enclosed_regions(mesh: pv.PolyData) -> List[pv.PolyData]:
     branch_points = []
     face = 0
 
-    continue_extracting_enclosed_regions(mesh, face, region_sets, branch_points, neighbors_dict)
+    continue_extracting_enclosed_regions(mesh, face, region_sets, branch_points, neighbors_dict, 0)
 
     regions = []
     for region_set in region_sets:
-        faces = pyvista_faces_to_1d(pyvista_faces_to_2d(mesh.face)[region_set])
+        faces = pyvista_faces_to_1d(pyvista_faces_to_2d(mesh.faces)[list(region_set)])
         region = pv.PolyData(mesh.points, faces)
         region = region.clean()  # Remove unused points
         regions.append(region)
@@ -498,23 +500,12 @@ def extract_enclosed_regions(mesh: pv.PolyData) -> List[pv.PolyData]:
     return regions
 
 
-def continue_extracting_enclosed_regions(mesh, face, region_sets, branch_faces, neighbors_dict):
-    # TODO: the problem is that with inner faces, their normal could be in any direction. so we can accidentally
-    # Jump back to the wrong region
-    # Solution: always recalculate the normal for the next face to be "opposing" the one from the current face.
-    # (i.e. both facing outward, the faces would rotate and hit each other instead of chasing each other
-
+def continue_extracting_enclosed_regions(mesh, face, region_sets, branch_faces, neighbors_dict, active_region_set):
     # Add face to the current region set
-    region_sets[-1].add(face)
+    region_sets[active_region_set].add(face)
 
     # Check all neighbors of the face
     for line, neighbors in neighbors_dict[face].items():
-        # Update winding for all neighbors. Note: we could also do this after selecting the next face, but then we'd
-        # have to do it when branching too, and we'd have to remember which neighbor we got to the branch from.
-        for neighbor in neighbors:
-            if find_sequence(pyvista_faces_to_2d(mesh.faces)[neighbor], line, check_reverse=False) == -1:
-                rewind_face(mesh, neighbor)
-
         # If there are multiple neighbors sharing a line, choose the inner path, and add the rest to the branch list
         # so we can go back for them once this set is finished
         if len(neighbors) > 1:
@@ -524,20 +515,22 @@ def continue_extracting_enclosed_regions(mesh, face, region_sets, branch_faces, 
             next_face = sorted_neighbors[0]
             for neighbor in sorted_neighbors[1:]:
                 if neighbor not in branch_faces:
-                    branch_faces.append(neighbor)
+                    branch_faces.append((face, line, neighbor))
         else:
             next_face = neighbors[0]
 
         # Only continue if the next face is not already in the set
-        if next_face not in region_sets[-1]:
+        if next_face not in region_sets[active_region_set]:
+            rewind_neighbor(mesh, face, next_face, line, wind_opposite=False)
             continue_extracting_enclosed_regions(mesh, next_face, region_sets,
-                                                 branch_faces, neighbors_dict)
+                                                 branch_faces, neighbors_dict, active_region_set)
 
     # Once we finish a set, if we've assigned all faces, we're finished.
     # If not, we start a new set with the earliest branch
     all_faces = set(range(0, mesh.n_faces))
     assigned_faces = set().union(*region_sets)
-    if not all_faces.issubset(assigned_faces):
+    if not all_faces.issubset(assigned_faces) and len(branch_faces) > 0:
         region_sets.append(set())
-        branch_face = branch_faces.pop(0)
-        continue_extracting_enclosed_regions(mesh, branch_face, region_sets, branch_faces, neighbors_dict)
+        branch_from, line, branch_face = branch_faces.pop(0)
+        rewind_neighbor(mesh, branch_from, branch_face, line, wind_opposite=False)
+        continue_extracting_enclosed_regions(mesh, branch_face, region_sets, branch_faces, neighbors_dict, active_region_set+1)
