@@ -185,7 +185,7 @@ def dihedral_angle(normal_a: ArrayLike, normal_b: ArrayLike, plane_normal: Array
     length_product = np.linalg.norm(normal_a) * np.linalg.norm(normal_b)
     dot_product = np.dot(normal_a, normal_b)
     cosine = dot_product / length_product
-    angle = np.arccos(cosine)
+    angle = np.arccos(np.clip(cosine, -1.0, 1.0))  # Avoid rounding errors resulting in nan
 
     if plane_normal is not None:
         cross_product = np.cross(normal_a, normal_b)

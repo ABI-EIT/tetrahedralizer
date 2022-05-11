@@ -11,6 +11,7 @@ import numpy.testing
 import pyvista as pv
 import collections
 from matplotlib import cm
+import sys
 
 mesh_a_verts = np.array([[0, 0, 0],
                          [0, 0, 1],
@@ -685,6 +686,32 @@ def test_extract_enclosed_regions():
 
     assert np.array_equal(regions[0].points, region_0_correct_points)
     assert np.array_equal(regions[1].points, region_1_correct_points)
+
+
+def test_extract_enclosed_regions_2():
+    resolution = 30  # Resolution 40 gives 6872 faces. Highest we can go before stack overflow
+    sphere_a = pv.Sphere(theta_resolution=resolution, phi_resolution=resolution)
+    sphere_b = pv.Sphere(theta_resolution=resolution, phi_resolution=resolution, center=(0.5, 0, 0))
+    union_result = sphere_a.boolean_union(sphere_b)
+    intersection_result = sphere_a.boolean_intersection(sphere_b)
+    merge_result = union_result.merge(intersection_result)
+
+    # p = pv.Plotter()
+    # p.add_mesh(merge_result, style="wireframe")
+    # # p.add_point_labels(merge_result.cell_centers().points, list(range(merge_result.n_cells)))
+    # p.add_points(merge_result.cell_centers().points[0])
+    # p.show()
+
+    regions = extract_enclosed_regions(merge_result)
+    # cmap = cm.get_cmap("Set1")
+    # p = pv.Plotter()
+    # for i, region in enumerate(regions):
+    #     p.add_mesh(region, style="wireframe", color=cmap(i), label=f"Region {i}")
+    #
+    # p.add_legend()
+    # p.show()
+
+    assert len(regions) == 3
 
 
 def main():

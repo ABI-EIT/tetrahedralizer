@@ -610,3 +610,28 @@ def choose_surface_face(surface: pv.PolyData, known_face: int, neighbors: List[i
     min = np.argmin(neighbors_angles)
     surface_face = neighbors[min]
     return surface_face
+
+
+def find_face_on_outer_surface(surface: pv.PolyData) -> int:
+    """
+    Find a face on the outer surface by casting a long ray from the first surface and choosing the last face it hits
+
+    Parameters
+    ----------
+    surface
+
+    Returns
+    -------
+    face
+        A face guaranteed to be on the outer surface of the input surface mesh
+
+    """
+    #
+    stop = surface.cell_centers().points[0] - surface.face_normals[0]
+    b = surface.bounds
+    distance = np.linalg.norm([b[1] - b[0], b[3] - b[2], b[5] - b[4]])
+    start = stop + (surface.face_normals[0] * distance)
+    _, intersection_cells = surface.ray_trace(start, stop, first_point=True)
+    face = intersection_cells[0]
+
+    return face
