@@ -643,6 +643,30 @@ def test_remove_boundary_faces_recursively():
     assert np.array_equal(surface_r.faces, correct_faces)
 
 
+def test_remove_boundary_edges_recursively_2():
+    resolution = 10
+    half_sphere = pv.Sphere(theta_resolution=resolution, phi_resolution=resolution).clip()
+    full_sphere = pv.Sphere(theta_resolution=resolution, phi_resolution=resolution, center=(-0.5, 0, 0))
+    union = half_sphere.boolean_union(full_sphere)
+    intersection = half_sphere.boolean_intersection(full_sphere)
+    example_mesh = union.merge(intersection)
+    example_mesh = pv.PolyData(example_mesh.points, example_mesh.faces)  # Why is this necessary?
+
+    # p = pv.Plotter()
+    # p.add_mesh(example_mesh, style="wireframe")
+    # # p.add_point_labels(example_mesh.cell_centers().points, list(range(example_mesh.n_cells)))
+    # p.add_points(example_mesh.cell_centers().points[[12, 121]])
+    # p.show()
+
+    boundary_removed = remove_boundary_faces_recursively(example_mesh)
+
+    boundary_edges = boundary_removed.extract_feature_edges(boundary_edges=True, feature_edges=False,
+                                                            non_manifold_edges=False, manifold_edges=False)
+
+
+    assert boundary_edges.n_faces == 0
+
+
 def test_extract_enclosed_regions():
     a = pv.Box().translate([-2, 0, 0], inplace=False)
     b = pv.Box()

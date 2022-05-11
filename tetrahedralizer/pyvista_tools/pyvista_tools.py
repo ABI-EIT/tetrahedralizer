@@ -31,7 +31,11 @@ def pyvista_faces_to_2d(faces: ArrayLike) -> NDArray:
     2d array of faces
     """
     points_per_face = faces[0]
-    return faces.reshape(-1, points_per_face + 1)[:, 1:]
+    faces = faces.reshape(-1, points_per_face+1)
+    if not np.all(faces[:, 0] == faces[:, 0]):
+        raise ValueError("pyvista_faces_to_2d requires all to be the same shape")
+
+    return faces[:, 1:]
 
 
 def pyvista_faces_to_1d(faces: NDArray) -> NDArray:
@@ -477,8 +481,6 @@ def identify_neighbors(surface: pv.PolyData) -> Tuple[Dict, Dict]:
     Identify neighbors of each face in a surface. Returns a dict of faces with each face's neighbors, grouped by the
     lines that the faces share. Also returns a dict of lines in the surface with each face that uses each line.
 
-    TODO: only works on triangles because it uses all combinations of points in faces. need to just use sequential points
-     in faces
 
     Parameters
     ----------
