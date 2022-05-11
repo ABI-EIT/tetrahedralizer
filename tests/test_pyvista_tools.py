@@ -644,11 +644,6 @@ def test_remove_boundary_faces_recursively():
 
 
 def test_extract_enclosed_regions():
-    # a = pv.Box(quads=False).translate([-2, 0, 0], inplace=False)
-    # b = pv.Box(quads=False)
-    # b = b.remove_cells([0, 1])
-    # c = a.merge(b)
-
     a = pv.Box().translate([-2, 0, 0], inplace=False)
     b = pv.Box()
     c = a.merge(b)

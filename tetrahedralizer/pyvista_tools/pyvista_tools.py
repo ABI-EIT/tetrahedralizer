@@ -236,6 +236,7 @@ def select_faces_using_edges(mesh: pv.PolyData, edges: pv.PolyData) -> List[int]
         List of faces in mesh that use edges
 
     """
+    mesh = mesh.copy()
     mesh = mesh.merge(edges)
 
     faces_using_edges = []
@@ -579,7 +580,7 @@ def compute_neighbor_angles(surface: pv.PolyData, known_face: int, neighbors: Li
     return neighbors_angles
 
 
-def choose_surface_face(surface: pv.PolyData, known_face: int, neighbors: List[int], shared_line: Tuple[int, int]) \
+def choose_outer_surface_face(surface: pv.PolyData, known_face: int, neighbors: List[int], shared_line: Tuple[int, int]) \
         -> int:
     """
     Choose which neighbor of a given face on a given shared line must lie on the true surface of the given surface mesh.
@@ -606,6 +607,19 @@ def choose_surface_face(surface: pv.PolyData, known_face: int, neighbors: List[i
     """
 
     neighbors_angles = compute_neighbor_angles(surface, known_face, neighbors, shared_line)
+
+    min = np.argmin(neighbors_angles)
+    surface_face = neighbors[min]
+    return surface_face
+
+
+def choose_inner_surface_face(surface: pv.PolyData, known_face: int, neighbors: List[int], shared_line: Tuple[int, int]) \
+        -> int:
+
+    agreements = compute_face_agreement_with_normals(surface)
+    if agreements[known_face]:
+        rewind_face(surface, known_face)
+    neighbors_angles = compute_neighbor_angles(surface, known_face, neighbors, shared_line, use_winding_order_normal=True)
 
     min = np.argmin(neighbors_angles)
     surface_face = neighbors[min]

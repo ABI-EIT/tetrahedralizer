@@ -9,8 +9,9 @@ import pyvista as pv
 from tqdm import tqdm
 from tetrahedralizer.pyvista_tools.geometry_tools import find_loops_and_chains, dihedral_angle, find_sequence
 from tetrahedralizer.pyvista_tools import select_faces_using_points, select_shared_points, pyvista_faces_to_1d, \
-    compute_face_agreement_with_normals, rewind_face, identify_neighbors, pyvista_faces_to_2d, choose_surface_face, \
-    loop_triangulation_algorithms, compute_neighbor_angles, rewind_neighbor, find_face_on_outer_surface
+    compute_face_agreement_with_normals, rewind_face, identify_neighbors, pyvista_faces_to_2d, choose_outer_surface_face, \
+    loop_triangulation_algorithms, compute_neighbor_angles, rewind_neighbor, find_face_on_outer_surface, \
+    choose_inner_surface_face
 
 """
 pyvista_features is a module that provides high level features for working with pyvista objects. These features should
@@ -282,7 +283,7 @@ def extract_outer_surface(surface: pv.PolyData, inplace=False) -> Optional[pv.Po
 
     # Recursively select faces which belong to the true surface
     selected_faces = []
-    continue_extracting_outer_surface(r_surface, selected_faces, face_a, neighbors_dict)
+    continue_extracting_surface(r_surface, selected_faces, face_a, neighbors_dict, outer=True)
     r_surface.faces = pyvista_faces_to_1d(pyvista_faces_to_2d(r_surface.faces)[selected_faces])
     r_surface = r_surface.clean()
 
@@ -292,7 +293,35 @@ def extract_outer_surface(surface: pv.PolyData, inplace=False) -> Optional[pv.Po
         return r_surface
 
 
-def continue_extracting_outer_surface(surface: pv.PolyData, selected_faces: list, face: int, neighbors_dict: dict):
+def extract_inner_surfaces(surface: pv.PolyData) -> List[pv.PolyData]:
+    """
+    Works like extract_outer_surface but finds inner surface.
+    Note: I don't yet know of a case where this is needed over just extract_enclosed_regions
+
+    Parameters
+    ----------
+    surface
+
+    Returns
+    -------
+
+    """
+    regions = extract_enclosed_regions(surface)
+
+    out_regions = []
+    for region in regions:
+        start_face = find_face_on_outer_surface(region)
+        neighbors_dict, _ = identify_neighbors(region)
+        selected_faces = []
+        continue_extracting_surface(region, selected_faces, start_face, neighbors_dict, outer=False)
+        region.faces = pyvista_faces_to_1d(pyvista_faces_to_2d(region.faces)[selected_faces])
+        out_region = region.clean()
+        out_regions.append(out_region)
+
+    return out_regions
+
+
+def continue_extracting_surface(surface: pv.PolyData, selected_faces: list, face: int, neighbors_dict: dict, outer=True):
     """
     Recursively move through neighbors of a face, selecting which neighbors belong to the true surface of the given
     surface mesh.
@@ -303,19 +332,23 @@ def continue_extracting_outer_surface(surface: pv.PolyData, selected_faces: list
     selected_faces
     face
     neighbors_dict
+    outer
     """
     for line in neighbors_dict[face]:
         neighbor_list = neighbors_dict[face][line]
         if len(neighbor_list) > 1:
             if not np.any([neighbor in selected_faces for neighbor in neighbor_list]):
-                chosen_neighbor = choose_surface_face(surface, face, neighbor_list, line)
+                if outer:
+                    chosen_neighbor = choose_outer_surface_face(surface, face, neighbor_list, line)
+                else:
+                    chosen_neighbor = choose_inner_surface_face(surface, face, neighbor_list, line)
                 selected_faces.append(chosen_neighbor)
-                continue_extracting_outer_surface(surface, selected_faces, chosen_neighbor, neighbors_dict)
+                continue_extracting_surface(surface, selected_faces, chosen_neighbor, neighbors_dict, outer=outer)
         else:
             neighbor = neighbor_list[0]
             if neighbor not in selected_faces:
                 selected_faces.append(neighbor)
-                continue_extracting_outer_surface(surface, selected_faces, neighbor, neighbors_dict)
+                continue_extracting_surface(surface, selected_faces, neighbor, neighbors_dict, outer=outer)
 
 
 def repeatedly_fill_holes(mesh: pv.DataSet, max_iterations=10, inplace=False, hole_size=1000, **kwargs) \
@@ -470,6 +503,7 @@ def extract_enclosed_regions(mesh: pv.PolyData) -> List[pv.PolyData]:
     ----------
     mesh
     """
+    mesh = mesh.copy()
     mesh = remove_boundary_faces_recursively(mesh)
     neighbors_dict, _ = identify_neighbors(mesh)
 
