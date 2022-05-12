@@ -4,7 +4,7 @@ from tetrahedralizer.pyvista_tools import remove_shared_faces, select_shared_fac
     find_loops_and_chains, triangulate_loop_with_stitch, triangulate_loop_with_nearest_neighbors, \
     select_intersecting_triangles, dihedral_angle, compute_normal, extract_outer_surface, identify_neighbors, \
     remove_boundary_faces_recursively, extract_enclosed_regions, compute_neighbor_angles, rewind_face, \
-    rewind_neighbor
+    rewind_neighbor, remove_shared_faces_with_merge
 
 import numpy as np
 import numpy.testing
@@ -184,6 +184,16 @@ def test_remove_shared_faces_again():
     assert np.array_equal(removed[0].faces, correct_removed_0_faces)
     assert np.array_equal(removed[1].points, correct_removed_1_points)
     assert np.array_equal(removed[1].faces, correct_removed_1_faces)
+
+
+def test_remove_shared_faces_with_merge():
+    shared_a = pv.Box(quads=False).rotate_z(90, inplace=False).translate([-2, 0, 0], inplace=False)
+    shared_b = pv.Box(quads=False)
+
+    merged = remove_shared_faces_with_merge([shared_a, shared_b])
+    # merged.plot(style="wireframe")
+
+    assert merged.n_faces == 20
 
 
 def test_remove_shared_faces_with_ray_trace():

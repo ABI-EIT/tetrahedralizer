@@ -7,6 +7,7 @@ import pyvista
 import vtkmodules.util
 import pyvista as pv
 from tqdm import tqdm
+from collections import defaultdict
 from tetrahedralizer.pyvista_tools.geometry_tools import find_loops_and_chains, dihedral_angle, find_sequence
 from tetrahedralizer.pyvista_tools import select_faces_using_points, select_shared_points, pyvista_faces_to_1d, \
     compute_face_agreement_with_normals, rewind_face, identify_neighbors, pyvista_faces_to_2d, choose_outer_surface_face, \
@@ -204,6 +205,51 @@ def remove_shared_faces(meshes: List[pv.DataSet], tolerance: float = None,
         return output, faces_to_remove
 
 
+def remove_shared_faces_with_merge(meshes: List[pv.PolyData], keep_one=False, return_removed_faces=False) \
+    -> pv.PolyData | Tuple[pv.PolyData, list]:
+    """
+    Merge a list of meshes and remove shared faces. Optionally keep one of each duplicate face (leaving shared wall
+    intact). Optionally return list of removed faces.
+
+    Parameters
+    ----------
+    meshes
+    keep_one
+        Keep one of each duplicate face instead of removing both
+    return_removed_faces
+        Return a list of faces that were removed
+
+    Returns
+    -------
+    merged
+        Merged mesh with shared faces removed
+
+    """
+    for i, mesh in enumerate(meshes):
+        merged = meshes[i-1].merge(mesh)
+
+    faces = pyvista_faces_to_2d(merged.faces)
+
+    faces_dict = defaultdict(list)
+    for i, face in enumerate(faces):
+        faces_dict[tuple(sorted(face))].append(i)
+
+    duplicate_faces_lists = [indices_list for _, indices_list in faces_dict.items() if len(indices_list) > 1]
+    if not keep_one:
+        duplicate_faces_list = list(itertools.chain.from_iterable(duplicate_faces_lists))
+    else:
+        duplicate_faces_list = []
+        for face_list in duplicate_faces_lists:
+            duplicate_faces_list.extend(face_list[1:])
+
+    merged = merged.remove_cells(duplicate_faces_list)
+
+    if return_removed_faces:
+        return merged, duplicate_faces_list
+    else:
+        return merged
+
+
 def pyvista_tetrahedral_mesh_from_arrays(nodes, tets) -> pyvista.UnstructuredGrid:
     """
     Create a Pyvista Unstructured Grid with tetrahedral cells from an array representation of 3xN nodes and 4xM tets
@@ -254,7 +300,8 @@ def rewind_faces_to_normals(mesh: pv.PolyData, inplace=False) -> Optional[pv.Pol
         return mesh_c
 
 
-def extract_outer_surface(surface: pv.PolyData, inplace=False) -> Optional[pv.PolyData]:
+def extract_outer_surface(surface: pv.PolyData, return_removed_faces=False, inplace=False) -> Optional[pv.PolyData] |\
+    Tuple[Optional[pv.PolyData], list]:
     """
     An algorithm to refine a surface mesh by keeping only faces on the outer surface of the mesh, thereby removing
     any inner walls that would be left by the Pyvista extract surface algorithm.
@@ -267,6 +314,8 @@ def extract_outer_surface(surface: pv.PolyData, inplace=False) -> Optional[pv.Po
     ----------
     surface
         Surface to refine
+    return_removed_faces
+        return removed faces
     inplace
         Update mesh inplace
 
@@ -274,9 +323,12 @@ def extract_outer_surface(surface: pv.PolyData, inplace=False) -> Optional[pv.Po
     -------
     r_surface
         Refined surface
+    removed_faces
+        Faces that were removed
 
     """
     r_surface = surface.copy()
+    original_faces = set(range(r_surface.n_faces))
 
     face_a = find_face_on_outer_surface(r_surface)
     neighbors_dict, _ = identify_neighbors(r_surface)
@@ -287,10 +339,18 @@ def extract_outer_surface(surface: pv.PolyData, inplace=False) -> Optional[pv.Po
     r_surface.faces = pyvista_faces_to_1d(pyvista_faces_to_2d(r_surface.faces)[selected_faces])
     r_surface = r_surface.clean()
 
+    if return_removed_faces:
+        removed_faces = [face for face in original_faces if face not in selected_faces]
+
     if inplace:
         surface.overwrite(r_surface)
+        if return_removed_faces:
+            return removed_faces
     else:
-        return r_surface
+        if return_removed_faces:
+            return r_surface, removed_faces
+        else:
+            return r_surface
 
 
 def extract_inner_surfaces(surface: pv.PolyData) -> List[pv.PolyData]:
