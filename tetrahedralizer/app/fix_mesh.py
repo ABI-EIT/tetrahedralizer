@@ -6,7 +6,7 @@ import os
 
 from tetrahedralizer.mesh_lib import fix_mesh
 
-from tetrahedralizer.pyvista_tools import remove_shared_faces
+from pyvista_tools import remove_shared_faces
 
 """
 App to apply meshfix to mesh and save

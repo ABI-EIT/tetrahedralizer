@@ -3,7 +3,7 @@ import numpy as np
 from tetrahedralizer.mesh_lib import gmsh_load_from_arrays, gmsh_tetrahedral_mesh_to_arrays, gmsh_tetrahedralize, \
     preprocess_and_tetrahedralize, pymeshlab_boolean
 import pyvista as pv
-from tetrahedralizer.pyvista_tools import pyvista_faces_to_2d, pyvista_faces_to_1d, \
+from pyvista_tools import pyvista_faces_to_2d, pyvista_faces_to_1d, \
     pyvista_tetrahedral_mesh_from_arrays, rewind_faces_to_normals
 from matplotlib import cm
 

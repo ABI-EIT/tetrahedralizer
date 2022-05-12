@@ -1,7 +1,7 @@
 import pyvista as pv
 from tkinter import Tk
 from tkinter.filedialog import askopenfilename
-from tetrahedralizer.pyvista_tools import extract_enclosed_regions
+from pyvista_tools import extract_enclosed_regions
 import numpy as np
 from matplotlib import cm
 

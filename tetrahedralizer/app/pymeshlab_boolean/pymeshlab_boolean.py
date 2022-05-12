@@ -6,7 +6,7 @@ from tkinter import Tk
 from tkinter.filedialog import askopenfilename
 
 from tetrahedralizer.mesh_lib import pymeshlab_boolean
-from tetrahedralizer.pyvista_tools import pyvista_faces_to_1d, pyvista_faces_to_2d
+from pyvista_tools import pyvista_faces_to_1d, pyvista_faces_to_2d
 import json
 
 

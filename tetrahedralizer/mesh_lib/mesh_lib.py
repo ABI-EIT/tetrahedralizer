@@ -7,8 +7,8 @@ import pymeshfix
 from pymeshlab.pmeshlab import PyMeshLabException
 import pymeshlab
 import pyvista as pv
-from tetrahedralizer import pyvista_tools
-from tetrahedralizer.pyvista_tools import pyvista_faces_to_2d, pyvista_faces_to_1d, remove_shared_faces_with_ray_trace,\
+import pyvista_tools
+from pyvista_tools import pyvista_faces_to_2d, pyvista_faces_to_1d, remove_shared_faces_with_ray_trace,\
     remove_shared_faces
 
 
@@ -287,6 +287,8 @@ def preprocess_and_tetrahedralize(outer_mesh: pv.PolyData, inner_meshes: List[pv
     hole_volume_in_cells = hole_volume/mean_cell_volume
 
     print(f"Hole volume: {hole_volume_percent:.4f}% of outer surface, {hole_volume_in_cells:.4f} x mean cell volume")
+
+    qual = out_combined.compute_cell_quality(quality_measure="max_edge_ratio")
 
     return out_combined
 

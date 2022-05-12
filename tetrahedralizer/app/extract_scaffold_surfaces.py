@@ -4,7 +4,7 @@ from tkinter import Tk
 from tkinter.filedialog import askopenfilename
 from matplotlib import cm
 import numpy as np
-from tetrahedralizer.pyvista_tools import pyvista_faces_to_2d, pyvista_faces_to_1d, \
+from pyvista_tools import pyvista_faces_to_2d, pyvista_faces_to_1d, \
     rewind_faces_to_normals, select_intersecting_triangles, \
     extract_outer_surface, fill_holes_with_strategy
 import os

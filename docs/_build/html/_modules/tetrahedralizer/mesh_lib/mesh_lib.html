@@ -41,8 +41,8 @@
 <span class="kn">from</span> <span class="nn">pymeshlab.pmeshlab</span> <span class="kn">import</span> <span class="n">PyMeshLabException</span>
 <span class="kn">import</span> <span class="nn">pymeshlab</span>
 <span class="kn">import</span> <span class="nn">pyvista</span> <span class="k">as</span> <span class="nn">pv</span>
-<span class="kn">from</span> <span class="nn">tetrahedralizer</span> <span class="kn">import</span> <span class="n">pyvista_tools</span>
-<span class="kn">from</span> <span class="nn">tetrahedralizer.pyvista_tools</span> <span class="kn">import</span> <span class="n">pyvista_faces_to_2d</span><span class="p">,</span> <span class="n">pyvista_faces_to_1d</span><span class="p">,</span> <span class="n">remove_shared_faces_with_ray_trace</span><span class="p">,</span>\
+<span class="kn">import</span> <span class="nn">pyvista_tools</span>
+<span class="kn">from</span> <span class="nn">pyvista_tools</span> <span class="kn">import</span> <span class="n">pyvista_faces_to_2d</span><span class="p">,</span> <span class="n">pyvista_faces_to_1d</span><span class="p">,</span> <span class="n">remove_shared_faces_with_ray_trace</span><span class="p">,</span>\
     <span class="n">remove_shared_faces</span>
 
 
@@ -321,6 +321,8 @@
     <span class="n">hole_volume_in_cells</span> <span class="o">=</span> <span class="n">hole_volume</span><span class="o">/</span><span class="n">mean_cell_volume</span>
 
     <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Hole volume: </span><span class="si">{</span><span class="n">hole_volume_percent</span><span class="si">:</span><span class="s2">.4f</span><span class="si">}</span><span class="s2">% of outer surface, </span><span class="si">{</span><span class="n">hole_volume_in_cells</span><span class="si">:</span><span class="s2">.4f</span><span class="si">}</span><span class="s2"> x mean cell volume&quot;</span><span class="p">)</span>
+
+    <span class="n">qual</span> <span class="o">=</span> <span class="n">out_combined</span><span class="o">.</span><span class="n">compute_cell_quality</span><span class="p">(</span><span class="n">quality_measure</span><span class="o">=</span><span class="s2">&quot;max_edge_ratio&quot;</span><span class="p">)</span>
 
     <span class="k">return</span> <span class="n">out_combined</span></div>
 
