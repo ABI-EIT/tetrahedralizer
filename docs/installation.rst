@@ -37,7 +37,7 @@ app in your current directory. Run the app using tetrahedralizer_qt.exe containe
 From sources
 ------------
 
-The sources for Advanced Producer Consumer can be downloaded from the `Github repo`_.
+The sources for Tetrahedralizer can be downloaded from the `Github repo`_.
 
 You can either clone the public repository:
 
