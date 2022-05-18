@@ -349,6 +349,9 @@ def dif_any_intersecting(meshes: List[Tuple[np.ndarray, np.ndarray]]) -> List[Tu
     """
     Iterate through a list of input surfaces and perform a boolean difference on any that are intersercting.
 
+    For correct behavior, no point should be within more than two meshes.
+    An error is raised if a difference operation would return None
+
     Parameters
     ----------
     meshes
@@ -387,7 +390,10 @@ def dif_any_intersecting(meshes: List[Tuple[np.ndarray, np.ndarray]]) -> List[Tu
     # Diff all the pairs
     diffed_meshes = []
     for pair in dif_pairs:
-        diffed_meshes.append(pymeshlab_boolean((meshes[pair[0]], meshes[pair[1]]), operation="Difference"))
+        diffed_mesh = pymeshlab_boolean((meshes[pair[0]], meshes[pair[1]]), operation="Difference")
+        if diffed_mesh is None:
+            raise ValueError("Difference operation returned None. Ensure meshes do not overlap completely")
+        diffed_meshes.append(diffed_mesh)
 
     # Put back in any that weren't diffed
     diffed_indices = [pair[0] for pair in dif_pairs]

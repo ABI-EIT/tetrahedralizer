@@ -1,10 +1,11 @@
 import gmsh
 import numpy as np
 from tetrahedralizer.mesh_lib import gmsh_load_from_arrays, gmsh_tetrahedral_mesh_to_arrays, gmsh_tetrahedralize, \
-    preprocess_and_tetrahedralize, pymeshlab_boolean
+    preprocess_and_tetrahedralize, pymeshlab_boolean, dif_any_intersecting
 import pyvista as pv
 from pyvista_tools import pyvista_faces_to_2d, pyvista_faces_to_1d, \
     pyvista_tetrahedral_mesh_from_arrays, rewind_faces_to_normals
+import numpy.testing
 from matplotlib import cm
 
 mesh_a_verts = np.array([[0, 0, 0],
@@ -256,4 +257,37 @@ def test_pymeshlab_boolean_wrong_normals():
     assert unioned_mesh_b_c_with_norms is None  # Setting normals should make it work again. Keep this here to check if they ever fix this
     assert unioned_mesh_d_c is not None  # Works again if you rewind the face back
 
+
+def test_dif_any_intersecting():
+    intersecting_a = pv.Box(quads=False).translate([-1, 0, 0], inplace=False)
+    intersecting_b = pv.Box(quads=False)
+    not_shared = pv.Box(quads=False).translate([4, 0, 0], inplace=False)
+
+    mesh_arrays = [(mesh.points, pyvista_faces_to_2d(mesh.faces)) for mesh in [intersecting_a, intersecting_b, not_shared]]
+
+    diffed_arrays = dif_any_intersecting(mesh_arrays)
+    pv_diffed_meshes = [pv.PolyData(mesh[0], pyvista_faces_to_1d(mesh[1])) for mesh in diffed_arrays]
+
+    # p = pv.Plotter()
+    # cmap = cm.get_cmap("Set1")
+    # for i, mesh in enumerate(pv_diffed_meshes):
+    #     p.add_mesh(mesh, style="wireframe", color=cmap(i))
+    # p.show()
+
+    np.testing.assert_almost_equal(pv_diffed_meshes[0].volume, 4)
+    np.testing.assert_almost_equal(pv_diffed_meshes[1].volume, 8)
+    np.testing.assert_almost_equal(pv_diffed_meshes[2].volume, 8)
+
+
+def test_dif_any_intersecting_2():
+    a = pv.Box(quads=False)
+    a_repeat = pv.Box(quads=False)
+    b = pv.Box(quads=False).translate([4, 0, 0], inplace=False)
+
+    mesh_arrays = [(mesh.points, pyvista_faces_to_2d(mesh.faces)) for mesh in [a, a_repeat, b]]
+
+    try:
+        diffed_arrays = dif_any_intersecting(mesh_arrays)
+    except ValueError as e:
+        assert e.args[0] == 'Difference operation returned None. Ensure meshes do not overlap completely'
 
