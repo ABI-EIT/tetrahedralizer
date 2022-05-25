@@ -78,7 +78,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             short_name =mesh_name.split('/')
             element_name =short_name[-1].split('.')
             element_name =element_name[0]
-            self.outer_mesh.cell_data["Element_name"] =np.array([element_name] * self.outer_mesh.n_cells)
+            self.outer_mesh["Element_name"] =np.array([element_name] * self.outer_mesh.n_cells)
         except (FileNotFoundError, ValueError) as e:
             print(e)
             return
@@ -99,7 +99,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
                 short_name = mesh_name.split('/')
                 element_name = short_name[-1].split('.')
                 element_name = element_name[0]
-                mesh.cell_data["Element_name"] = np.array([element_name] * mesh.n_cells)
+                mesh["Element_name"] = np.array([element_name] * mesh.n_cells)
 
         except (FileNotFoundError,) as e:
             print(e)
@@ -170,7 +170,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             output_filename += self.output_suffix
 
             filename = f"{self.output_directory}/{output_filename}{self.output_extension}"
-            self.tetrahedralized_mesh.save(f"{filename}")
+            self.tetrahedralized_mesh.save(f"{filename}", binary=False)
             self.textEdit.append(f"Saved output mesh in {filename}")
         except Exception as e:
             self.textEdit.append(str(e))
