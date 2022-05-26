@@ -10,6 +10,8 @@ import pyvista as pv
 import pyvista_tools
 from pyvista_tools import pyvista_faces_to_2d, pyvista_faces_to_1d, remove_shared_faces_with_ray_trace,\
     remove_shared_faces
+import vtk
+from vtk.util import numpy_support
 
 
 def fix_mesh(mesh: pv.DataSet, repair_kwargs: Dict = None) -> Tuple[pv.DataSet, pv.PolyData]:
@@ -228,6 +230,8 @@ def preprocess_and_tetrahedralize(outer_mesh: pv.PolyData, inner_meshes: List[pv
     print("Fixing...")
     # Fix all inputs
     fixed_meshes = []
+
+    # blahblahlables = []
     for mesh in [outer_mesh, *inner_meshes]:
         if not mesh.is_manifold:
             fixed_meshes.append(fix_mesh(mesh, mesh_repair_kwargs)[0])
@@ -241,8 +245,23 @@ def preprocess_and_tetrahedralize(outer_mesh: pv.PolyData, inner_meshes: List[pv
     # # List of meshes where intersecting pairs are replaced with a diffed and an original
     diffed_meshes = dif_any_intersecting(fixed_mesh_arrays[1:])
     pv_diffed_meshes = [pv.PolyData(mesh[0], pyvista_faces_to_1d(mesh[1])) for mesh in diffed_meshes]
-    fixed_diffed = [fix_mesh(mesh, mesh_repair_kwargs)[0] if not mesh.is_manifold else mesh for mesh in pv_diffed_meshes]
+    for i, mesh in enumerate(inner_meshes):
+        if "Element_name" not in inner_meshes[i].cell_data:
+            continue
+        element_name = inner_meshes[i]["Element_name"][0]
+        sizes = pv_diffed_meshes[i].n_cells
+        pv_diffed_meshes[i]["Element_name"] = np.array([element_name] * sizes)
 
+    fixed_diffed = [fix_mesh(mesh, mesh_repair_kwargs)[0] if not mesh.is_manifold else mesh for mesh in pv_diffed_meshes]
+    for i, mesh in enumerate(fixed_diffed):
+        if "Element_name" not in pv_diffed_meshes[i].cell_data:
+            continue
+        element_name = pv_diffed_meshes[i]["Element_name"][0]
+        sizes = pv_diffed_meshes[i].n_cells
+        fixed_diffed[i]["Element_name"] = np.array([element_name] * sizes)
+
+
+##lable goes into meshes @fixed_diffed
     print("Combining...")
     # Remove shared faces to form inner hole
     combined = remove_shared_faces(inner_meshes, progress_bar=True)
@@ -261,17 +280,31 @@ def preprocess_and_tetrahedralize(outer_mesh: pv.PolyData, inner_meshes: List[pv
     # Tetrahedralize outer mesh with hole, then convert to pyvista
     nodes, elements = gmsh_tetrahedralize([fixed_mesh_arrays[0], *fixed_unioned_arrays], gmsh_options)
     outer_tetrahedralized = pyvista_tools.pyvista_tetrahedral_mesh_from_arrays(nodes, elements[1])
+    ##add mesh label
+    if "Element_name" in outer_mesh.cell_data:
+        outer_element_name = outer_mesh["Element_name"][0]
+        outer_sizes = outer_tetrahedralized.n_cells
+        outer_tetrahedralized["Element_name"] =np.array([outer_element_name] * outer_sizes)
 
     # Tetrahedralize each inner mesh, then convert to pyvista
     inner_tetrahedralized = []
     fixed_diffed_arrays = [(mesh.points, pyvista_faces_to_2d(mesh.faces)) for mesh in fixed_diffed]
-    for mesh in fixed_diffed_arrays:
+
+    for i, mesh in enumerate(fixed_diffed_arrays):
         nodes, elements = gmsh_tetrahedralize([mesh], gmsh_options)
-        inner_tetrahedralized.append(
-            pyvista_tools.pyvista_tetrahedral_mesh_from_arrays(nodes, elements[1]))
+        tetrahedralized_mesh = pyvista_tools.pyvista_tetrahedral_mesh_from_arrays(nodes, elements[1])
+
+        if "Element_name" in fixed_diffed[i].cell_data:
+            element_name = fixed_diffed[i]["Element_name"][0]
+            size = tetrahedralized_mesh.n_cells
+            tetrahedralized_mesh["Element_name"] = np.array([element_name] * size)
+
+        inner_tetrahedralized.append(tetrahedralized_mesh)
 
     # Combine result
     out_meshes = [outer_tetrahedralized, *inner_tetrahedralized]
+
+
     for i, mesh in enumerate(out_meshes):
         mesh.cell_data["Scalar"] = np.asarray([i % len(out_meshes)] * mesh.n_cells)
     blocks = pv.MultiBlock(out_meshes)
@@ -404,4 +437,13 @@ def dif_any_intersecting(meshes: List[Tuple[np.ndarray, np.ndarray]]) -> List[Tu
     return diffed_meshes
 
 
+def label_any_mesh(meshes, label):
+    """take in a mesh and a label
+    output the mesh with a label for vtk
+    """
+    scalar3_array = numpy_support.numpy_to_vtk(scalar3)
+    scalar3_array.SetName('scalar3')
+    cell_data.AddArray(scalar3)
 
+
+    return diffed_meshes

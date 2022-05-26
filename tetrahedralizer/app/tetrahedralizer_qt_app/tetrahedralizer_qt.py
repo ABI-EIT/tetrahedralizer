@@ -16,6 +16,7 @@ import vtkmodules.all
 import multiprocessing
 from pathlib import Path
 import sys
+import numpy as np
 
 # If we're in pyinstaller, set conf and output directories up one level so they are out of the mess
 file_directory = str(Path(__file__).parent)
@@ -72,6 +73,8 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             filename = askopenfilename(title="Select outer mesh")
             Tk().destroy()
             self.outer_mesh = pv.read(filename)
+            element_name = str(Path(filename).stem)
+            self.outer_mesh["Element_name"] =np.array([element_name] * self.outer_mesh.n_cells)
         except (FileNotFoundError, ValueError) as e:
             print(e)
             return
@@ -86,6 +89,12 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             filenames = askopenfilenames(title="Select inner meshes")
             Tk().destroy()
             self.inner_meshes = [pv.read(filename) for filename in filenames]
+            ##add mesh label
+            for i, mesh in enumerate(self.inner_meshes):
+                mesh_name = filenames[i]
+                element_name = str(Path(mesh_name).stem)
+                mesh["Element_name"] = np.array([element_name] * mesh.n_cells)
+
         except (FileNotFoundError,) as e:
             print(e)
             return
@@ -155,7 +164,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             output_filename += self.output_suffix
 
             filename = f"{self.output_directory}/{output_filename}{self.output_extension}"
-            self.tetrahedralized_mesh.save(f"{filename}")
+            self.tetrahedralized_mesh.save(f"{filename}", binary=False)
             self.textEdit.append(f"Saved output mesh in {filename}")
         except Exception as e:
             self.textEdit.append(str(e))
