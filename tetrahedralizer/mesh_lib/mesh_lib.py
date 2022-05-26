@@ -275,7 +275,7 @@ def preprocess_and_tetrahedralize(outer_mesh: pv.PolyData, inner_meshes: List[pv
     for i, mesh in enumerate(out_meshes):
         mesh.cell_data["Scalar"] = np.asarray([i % len(out_meshes)] * mesh.n_cells)
     blocks = pv.MultiBlock(out_meshes)
-    out_combined = blocks.combine()
+    out_combined = blocks.combine(merge_points=True)
 
     cell_sizes = out_combined.compute_cell_sizes()
 
