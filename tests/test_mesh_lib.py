@@ -138,6 +138,10 @@ def test_preprocess_and_tetrahedralize_simple():
     inner_a = pv.Box(quads=False).translate([2, 0, 0], inplace=False)
     inner_b = pv.Box(quads=False).translate([-2, 0, 0], inplace=False)
 
+    outer["Element_name"] = np.array(["hello"] * outer.n_cells)
+    inner_a["Element_name"] = np.array(["world"] * inner_a.n_cells)
+    inner_b["Element_name"] = np.array(["world2"] * inner_a.n_cells)
+
     tet = preprocess_and_tetrahedralize(outer, [inner_a, inner_b], {}, {})
 
     # # Plot result
@@ -196,6 +200,7 @@ def test_preprocess_and_tetrahedralize_simple():
 
     assert np.all(np.isclose(tet.points, correct_points))
     assert np.array_equal(tet.cells, correct_cells)
+    assert "Element_name" in tet.cell_data
 
 
 def test_pymeshlab_boolean():

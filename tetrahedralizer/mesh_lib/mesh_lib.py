@@ -246,15 +246,19 @@ def preprocess_and_tetrahedralize(outer_mesh: pv.PolyData, inner_meshes: List[pv
     diffed_meshes = dif_any_intersecting(fixed_mesh_arrays[1:])
     pv_diffed_meshes = [pv.PolyData(mesh[0], pyvista_faces_to_1d(mesh[1])) for mesh in diffed_meshes]
     for i, mesh in enumerate(inner_meshes):
-        element_name = inner_meshes[i].cell_data["Element_name"][0]
+        if "Element_name" not in inner_meshes[i].cell_data:
+            continue
+        element_name = inner_meshes[i]["Element_name"][0]
         sizes = pv_diffed_meshes[i].n_cells
         pv_diffed_meshes[i]["Element_name"] = np.array([element_name] * sizes)
 
     fixed_diffed = [fix_mesh(mesh, mesh_repair_kwargs)[0] if not mesh.is_manifold else mesh for mesh in pv_diffed_meshes]
     for i, mesh in enumerate(fixed_diffed):
+        if "Element_name" not in pv_diffed_meshes[i].cell_data:
+            continue
         element_name = pv_diffed_meshes[i]["Element_name"][0]
         sizes = pv_diffed_meshes[i].n_cells
-        fixed_diffed[i]["Element_names"] = np.array([element_name] * sizes)
+        fixed_diffed[i]["Element_name"] = np.array([element_name] * sizes)
 
 
 ##lable goes into meshes @fixed_diffed
@@ -277,22 +281,25 @@ def preprocess_and_tetrahedralize(outer_mesh: pv.PolyData, inner_meshes: List[pv
     nodes, elements = gmsh_tetrahedralize([fixed_mesh_arrays[0], *fixed_unioned_arrays], gmsh_options)
     outer_tetrahedralized = pyvista_tools.pyvista_tetrahedral_mesh_from_arrays(nodes, elements[1])
     ##add mesh label
-    outer_element_name = outer_mesh["Element_name"][0]
-    outer_sizes = outer_tetrahedralized.n_cells
-    outer_tetrahedralized["Element_names"] =np.array([outer_element_name] * outer_sizes)
+    if "Element_name" in outer_mesh.cell_data:
+        outer_element_name = outer_mesh["Element_name"][0]
+        outer_sizes = outer_tetrahedralized.n_cells
+        outer_tetrahedralized["Element_name"] =np.array([outer_element_name] * outer_sizes)
 
     # Tetrahedralize each inner mesh, then convert to pyvista
     inner_tetrahedralized = []
     fixed_diffed_arrays = [(mesh.points, pyvista_faces_to_2d(mesh.faces)) for mesh in fixed_diffed]
 
-    for mesh in fixed_diffed_arrays:
-
+    for i, mesh in enumerate(fixed_diffed_arrays):
         nodes, elements = gmsh_tetrahedralize([mesh], gmsh_options)
-        inner_tetrahedralized.append(
-            pyvista_tools.pyvista_tetrahedral_mesh_from_arrays(nodes, elements[1]))
+        tetrahedralized_mesh = pyvista_tools.pyvista_tetrahedral_mesh_from_arrays(nodes, elements[1])
 
-       # Add Lable for this area
+        if "Element_name" in fixed_diffed[i].cell_data:
+            element_name = fixed_diffed[i]["Element_name"][0]
+            size = tetrahedralized_mesh.n_cells
+            tetrahedralized_mesh["Element_name"] = np.array([element_name] * size)
 
+        inner_tetrahedralized.append(tetrahedralized_mesh)
 
     # Combine result
     out_meshes = [outer_tetrahedralized, *inner_tetrahedralized]
