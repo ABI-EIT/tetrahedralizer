@@ -73,11 +73,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             filename = askopenfilename(title="Select outer mesh")
             Tk().destroy()
             self.outer_mesh = pv.read(filename)
-            ##add mesh label
-            mesh_name = filename
-            short_name =mesh_name.split('/')
-            element_name =short_name[-1].split('.')
-            element_name =element_name[0]
+            element_name = str(Path(filename).stem)
             self.outer_mesh["Element_name"] =np.array([element_name] * self.outer_mesh.n_cells)
         except (FileNotFoundError, ValueError) as e:
             print(e)
@@ -96,9 +92,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             ##add mesh label
             for i, mesh in enumerate(self.inner_meshes):
                 mesh_name = filenames[i]
-                short_name = mesh_name.split('/')
-                element_name = short_name[-1].split('.')
-                element_name = element_name[0]
+                element_name = str(Path(mesh_name).stem)
                 mesh["Element_name"] = np.array([element_name] * mesh.n_cells)
 
         except (FileNotFoundError,) as e:
