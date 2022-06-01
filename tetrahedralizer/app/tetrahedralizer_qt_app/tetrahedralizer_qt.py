@@ -6,6 +6,7 @@ from tkinter.filedialog import askopenfilename, askopenfilenames
 import pyvista as pv
 import json
 from tetrahedralizer.mesh_lib import preprocess_and_tetrahedralize
+from tetrahedralizer.mesh_lib import label_any_mesh
 from pyvistaqt import QtInteractor
 from matplotlib import cm
 import os
@@ -216,9 +217,13 @@ class Worker(adv_prodcon.Producer, QObject):
         try:
             tetrahedralized_mesh = preprocess_and_tetrahedralize(kwargs["outer_mesh"], kwargs["inner_meshes"],
                                                                  kwargs["mesh_repair_kwargs"], kwargs["gmsh_options"])
+            ## add scalars to the mesh?  read in from a .json or use default
+            tetrahedralized_mesh_values = label_any_mesh(tetrahedralized_mesh)
+
             return tetrahedralized_mesh, ""
         except Exception as e:
             return pv.UnstructuredGrid(), str(e)
+
 
     def on_message_ready(self, message):
         if message == "Started":

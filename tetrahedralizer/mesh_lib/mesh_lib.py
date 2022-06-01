@@ -437,13 +437,16 @@ def dif_any_intersecting(meshes: List[Tuple[np.ndarray, np.ndarray]]) -> List[Tu
     return diffed_meshes
 
 
-def label_any_mesh(meshes, label):
-    """take in a mesh and a label
-    output the mesh with a label for vtk
+def label_any_mesh(tetrahedralized_mesh):
     """
-    scalar3_array = numpy_support.numpy_to_vtk(scalar3)
-    scalar3_array.SetName('scalar3')
-    cell_data.AddArray(scalar3)
+
+    Args:
+        tetrahedralized_mesh:
+
+    Returns:
+
+    """
+    mesh_area = tetrahedralized_mesh["Element_name"]
 
 
-    return diffed_meshes
+    return tetrahedralized_mesh_values 
