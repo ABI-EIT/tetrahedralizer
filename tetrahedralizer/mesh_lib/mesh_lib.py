@@ -439,14 +439,21 @@ def dif_any_intersecting(meshes: List[Tuple[np.ndarray, np.ndarray]]) -> List[Tu
 
 def label_any_mesh(tetrahedralized_mesh):
     """
+  Args:
+      tetrahedralized_mesh:
 
-    Args:
-        tetrahedralized_mesh:
+  Returns:
+      tet_mesh_values
+      """
+    # pass
+    # compare the strings
+    strings = tetrahedralized_mesh["Element_name"]
+    # lets split out the strings
+    strnglist = list(strings)
+    strngset = set(strnglist)
+    listmyset = list(strngset)
+    # Test here - add a value to each area
 
-    Returns:
-
-    """
-    mesh_area = tetrahedralized_mesh["Element_name"]
-
-
-    return tetrahedralized_mesh_values 
+    for i, entry in enumerate(listmyset):
+        tetrahedralized_mesh[listmyset[i]] = [1 if element_name == listmyset[i] else 0 for element_name in tetrahedralized_mesh["Element_name"]]
+    return tetrahedralized_mesh
