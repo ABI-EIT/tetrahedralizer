@@ -12,7 +12,9 @@ from pyvista_tools import pyvista_faces_to_2d, pyvista_faces_to_1d, remove_share
     remove_shared_faces
 import vtk
 from vtk.util import numpy_support
-
+from pathlib import Path
+import json
+from tetrahedralizer.DielectricDecomposition.LookupTables.permittivity_lookup import permittivity_lookup
 
 def fix_mesh(mesh: pv.DataSet, repair_kwargs: Dict = None) -> Tuple[pv.DataSet, pv.PolyData]:
     """
@@ -437,8 +439,11 @@ def dif_any_intersecting(meshes: List[Tuple[np.ndarray, np.ndarray]]) -> List[Tu
     return diffed_meshes
 
 
-def label_any_mesh(tetrahedralized_mesh):
+def label_any_mesh(tetrahedralized_mesh, confloc):
     """
+    Assigns values to a mesh at the nodes, will either be numeric from the file number - eg first file will be 1, second will be 2 etc.
+    Values can also be assigned from a .json config file.
+
   Args:
       tetrahedralized_mesh:
 
@@ -455,5 +460,59 @@ def label_any_mesh(tetrahedralized_mesh):
     # Test here - add a value to each area
 
     for i, entry in enumerate(listmyset):
-        tetrahedralized_mesh[listmyset[i]] = [1 if element_name == listmyset[i] else 0 for element_name in tetrahedralized_mesh["Element_name"]]
+        nodevalues = assign_from_json(listmyset[i] , confloc)
+        tetrahedralized_mesh[listmyset[i]] = [nodevalues if element_name == listmyset[i] else 0 for element_name in tetrahedralized_mesh["Element_name"]] ## need to potentially allow tetmesh nodes to accept vector inputs.
     return tetrahedralized_mesh
+
+def assign_from_json(fname,confloc ):
+    """
+    MIN_FREQUENCY = 1e9   # 1 GHz
+    MAX_FREQUENCY = 8e9  # 10 GHz
+    Parameters
+    ----------
+    fname
+    confloc
+
+    Returns
+    -------
+
+    """
+    config_filename = confloc + r"\mesh_conf.json"
+    with open(config_filename, "r") as f:
+        config = json.load(f)
+
+    # material_types ={}
+    # for n, name in enumerate(fname):
+    #     material_types[n] =(config[name])
+    # ## lookup the permittivity values for those types?
+    # # material = "blood"
+    # frequencies = 1000000000.0
+    # outmat = []
+    # materials = []
+    # for mat in material_types:
+    #     material = material_types[mat]
+    #     outmat = permittivity_lookup(material, frequencies)
+    #     materials.append(outmat)
+
+    # nodevalues = config[fname]
+
+    # if fname in config:
+    #     if fname in config == str:
+    #         nodevalues = config[fname]
+    #     else:
+    #         config[fname] = nodevalues
+    ## simple assign from json with no lookup:
+    # nodevals = config[fname]
+    if isinstance(config[fname], str) == True:
+        material = config[fname]
+        frequencies = 1010000000. ## read these in in the future - allow for possible changing mesh properties / changing frequencies
+        output = permittivity_lookup(material, frequencies)
+        nodevals = output
+    else:
+        nodevals= config[fname]
+
+    return nodevals
+    # else:
+    #     nodevalues = ()
+            # default_frequency = config[]
+            # read the strings in, lookup the values of the nodes, if there is nothing in the file make node value = int

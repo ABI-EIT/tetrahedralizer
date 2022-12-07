@@ -78,6 +78,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             self.outer_mesh["Element_name"] =np.array([element_name] * self.outer_mesh.n_cells)
         except (FileNotFoundError, ValueError) as e:
             print(e)
+            print("probably FileNotFoundError, or ValueError")
             return
 
         self.outer_mesh_filename = filename
@@ -218,7 +219,7 @@ class Worker(adv_prodcon.Producer, QObject):
             tetrahedralized_mesh = preprocess_and_tetrahedralize(kwargs["outer_mesh"], kwargs["inner_meshes"],
                                                                  kwargs["mesh_repair_kwargs"], kwargs["gmsh_options"])
             ## add scalars to the mesh?  read in from a .json or use default
-            tetrahedralized_mesh_values = label_any_mesh(tetrahedralized_mesh)
+            tetrahedralized_mesh = label_any_mesh(tetrahedralized_mesh,conf_directory)
 
             return tetrahedralized_mesh, ""
         except Exception as e:
