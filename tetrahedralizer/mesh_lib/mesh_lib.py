@@ -461,7 +461,7 @@ def label_any_mesh(tetrahedralized_mesh, confloc):
 
     for i, entry in enumerate(listmyset):
         nodevalues = assign_from_json(listmyset[i] , confloc)
-        tetrahedralized_mesh[listmyset[i]] = [nodevalues if element_name == listmyset[i] else 0 for element_name in tetrahedralized_mesh["Element_name"]] ## need to potentially allow tetmesh nodes to accept vector inputs.
+        tetrahedralized_mesh[listmyset[i]] = [nodevalues if element_name == listmyset[i] else 0 for element_name in tetrahedralized_mesh["Element_name"]] ## need to allow tetmesh nodes to accept vector inputs.
     return tetrahedralized_mesh
 
 def assign_from_json(fname,confloc ):
@@ -506,8 +506,11 @@ def assign_from_json(fname,confloc ):
     if isinstance(config[fname], str) == True:
         material = config[fname]
         frequencies = 1010000000. ## read these in in the future - allow for possible changing mesh properties / changing frequencies
-        output = permittivity_lookup(material, frequencies)
-        nodevals = output
+        output = permittivity_lookup(material, frequencies) ## this outputs 2 values - permittivity, conductivity
+
+        permittivity = float(output[0][0])
+        conductivity = float(output[1][0])
+        nodevals = permittivity
     else:
         nodevals= config[fname]
 

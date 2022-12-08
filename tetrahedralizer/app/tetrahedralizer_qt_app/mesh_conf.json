@@ -14,5 +14,6 @@
   "cartilage" : 3.14,
   "fat" : 87,
   "lung_deflated" : "lung (deflated)",
-  "lung_inflated" : "lung (inflated)"
+  "lung_inflated" : "lung (inflated)",
+  "bone_cortical" : "bone (cortical)"
 }
