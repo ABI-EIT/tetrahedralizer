@@ -28,10 +28,9 @@ def main():
 
     # Load files
     meshes = [pv.read(filename) for filename in filenames]
-    mesh_arrays = [(mesh.points, pyvista_faces_to_2d(mesh.faces)) for mesh in meshes]
 
     # Tetrahedralize
-    nodes, elements = gmsh_tetrahedralize(mesh_arrays, gmsh_options)
+    mesh = gmsh_tetrahedralize(meshes, gmsh_options)
 
     # Save result
     if not os.path.exists(output_directory):
@@ -43,7 +42,6 @@ def main():
         output_filename += f"{mesh_path.stem}_"
     output_filename += output_suffix
 
-    mesh = pyvista_tetrahedral_mesh_from_arrays(nodes, elements[1])
     mesh.save(f"{output_directory}/{output_filename}{output_extension}")
 
     #Plot result

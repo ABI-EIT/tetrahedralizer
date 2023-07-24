@@ -30,7 +30,7 @@ def main():
     mesh = pv.read(filename)
 
     # Fix
-    fixed_mesh, holes = fix_mesh(mesh, repair_kwargs)
+    fixed_mesh, holes = fix_mesh(mesh, repair_kwargs, return_holes=True)
 
     # Save
     path = pathlib.Path(filename)

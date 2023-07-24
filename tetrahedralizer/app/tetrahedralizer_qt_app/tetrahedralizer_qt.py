@@ -53,6 +53,8 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self.output_extension = config["output_extension"]
         self.mesh_repair_kwargs = config["mesh_repair_kwargs"]
         self.gmsh_options = config["gmsh_options"]
+        self.outer_mesh_element_label = None
+        self.inner_mesh_element_labels = None
 
         self.outer_mesh_tool_button.clicked.connect(self.get_outer_mesh)
         self.inner_meshes_tool_button.clicked.connect(self.get_inner_meshes)
@@ -74,7 +76,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             Tk().destroy()
             self.outer_mesh = pv.read(filename)
             element_name = str(Path(filename).stem)
-            self.outer_mesh["Element_name"] =np.array([element_name] * self.outer_mesh.n_cells)
+            self.outer_mesh_element_label = element_name
         except (FileNotFoundError, ValueError) as e:
             print(e)
             return
@@ -89,11 +91,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             filenames = askopenfilenames(title="Select inner meshes")
             Tk().destroy()
             self.inner_meshes = [pv.read(filename) for filename in filenames]
-            ##add mesh label
-            for i, mesh in enumerate(self.inner_meshes):
-                mesh_name = filenames[i]
-                element_name = str(Path(mesh_name).stem)
-                mesh["Element_name"] = np.array([element_name] * mesh.n_cells)
+            self.inner_mesh_element_labels = [str(Path(filename).stem) for filename in filenames]
 
         except (FileNotFoundError,) as e:
             print(e)
@@ -137,7 +135,8 @@ class MainWindow(QMainWindow, Ui_MainWindow):
 
         self.textEdit.append("Running tetrahedralization...")
 
-        self.worker = Worker(self.outer_mesh, self.inner_meshes, self.mesh_repair_kwargs, self.gmsh_options)
+        self.worker = Worker(self.outer_mesh, self.inner_meshes, self.mesh_repair_kwargs, self.gmsh_options,
+                             self.outer_mesh_element_label, self.inner_mesh_element_labels)
         dummy_subscriber = adv_prodcon.Consumer()
         self.worker.set_subscribers([dummy_subscriber.get_work_queue()])
         self.worker.finished.connect(self.after_tetrahedralization)
@@ -190,11 +189,14 @@ class Worker(adv_prodcon.Producer, QObject):
     finished = pyqtSignal((pv.UnstructuredGrid, str))
     std_out = pyqtSignal(str)
 
-    def __init__(self, outer_mesh, inner_meshes, mesh_repair_kwargs, gmsh_options):
+    def __init__(self, outer_mesh, inner_meshes, mesh_repair_kwargs, gmsh_options, outer_mesh_element_label,
+                 inner_mesh_element_labels):
         super(adv_prodcon.Producer, self).__init__()
         super(QObject, self).__init__()
         self.work_kwargs = {"outer_mesh": outer_mesh, "inner_meshes": inner_meshes,
-                            "mesh_repair_kwargs": mesh_repair_kwargs, "gmsh_options": gmsh_options}
+                            "mesh_repair_kwargs": mesh_repair_kwargs, "gmsh_options": gmsh_options,
+                            "outer_mesh_element_label": outer_mesh_element_label,
+                            "inner_mesh_element_labels": inner_mesh_element_labels}
 
     @staticmethod
     def on_start(state, message_pipe, *args, **kwargs):
@@ -215,7 +217,9 @@ class Worker(adv_prodcon.Producer, QObject):
         message_pipe.send("Started")
         try:
             tetrahedralized_mesh = preprocess_and_tetrahedralize(kwargs["outer_mesh"], kwargs["inner_meshes"],
-                                                                 kwargs["mesh_repair_kwargs"], kwargs["gmsh_options"])
+                                                                 kwargs["mesh_repair_kwargs"], kwargs["gmsh_options"],
+                                                                 kwargs["outer_mesh_element_label"],
+                                                                 kwargs["inner_mesh_element_labels"])
             return tetrahedralized_mesh, ""
         except Exception as e:
             return pv.UnstructuredGrid(), str(e)

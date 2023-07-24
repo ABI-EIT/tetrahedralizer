@@ -1,6 +1,6 @@
 from __future__ import annotations
 import itertools
-from typing import Dict, Tuple, List, Optional
+from typing import Dict, Tuple, List, Optional, Union
 import gmsh
 import numpy as np
 import pymeshfix
@@ -8,13 +8,12 @@ from pymeshlab.pmeshlab import PyMeshLabException
 import pymeshlab
 import pyvista as pv
 import pyvista_tools
-from pyvista_tools import pyvista_faces_to_2d, pyvista_faces_to_1d, remove_shared_faces_with_ray_trace,\
+from pyvista_tools import pyvista_faces_to_2d, pyvista_faces_to_1d, remove_shared_faces_with_ray_trace, \
     remove_shared_faces
-import vtk
-from vtk.util import numpy_support
 
 
-def fix_mesh(mesh: pv.DataSet, repair_kwargs: Dict = None) -> Tuple[pv.DataSet, pv.PolyData]:
+def fix_mesh(mesh: pv.DataSet, repair_kwargs: Dict = None, return_holes=False) -> Union[
+    pv.DataSet, Tuple[pv.DataSet, pv.PolyData]]:
     """
     Call the meshfix.repair function on a Pyvista dataset and return a fixed copy of the dataset along with the meshfix
     holes
@@ -25,6 +24,8 @@ def fix_mesh(mesh: pv.DataSet, repair_kwargs: Dict = None) -> Tuple[pv.DataSet, 
         Pyvista Dataset
     repair_kwargs
         Kwargs for meshfix.repair
+    return_holes
+        Flag to return holes if desired
 
     Returns
     -------
@@ -41,7 +42,10 @@ def fix_mesh(mesh: pv.DataSet, repair_kwargs: Dict = None) -> Tuple[pv.DataSet, 
     fixed_mesh.points = meshfix.v
     fixed_mesh.faces = pyvista_faces_to_1d(meshfix.f)
 
-    return fixed_mesh, holes
+    if return_holes:
+        return fixed_mesh, holes
+    else:
+        return fixed_mesh
 
 
 #: Dict to map names to pymeshlab boolean operations
@@ -53,33 +57,27 @@ pymeshlab_op_map = {
 }
 
 
-def pymeshlab_boolean(meshes: Tuple[Tuple[np.ndarray, ...], Tuple[np.ndarray, ...]], operation: str) \
-        -> Optional[Tuple[np.ndarray, np.ndarray]]:
+def pymeshlab_boolean(meshes: List[pv.PolyData], operation: str) -> Optional[pv.PolyData]:
     """
-    Run a pymesh boolean operation on two input meshes. The meshes are described as a platform agnostic Tuple of ndarrays
-    representing mesh vertices and faces. The format is as follows:
-    Tuple element 0: 3xN ndarray of float representing XYZ points in 3D space
-    Tuple element 1: 3xN ndarray of int representing triangular faces composed of indices the points
-
-    Optionally, face normals can be specified:
-    Tuple element 2: 3xN ndarray of float representing face normals. But this doesn't work
+    Run a pymesh boolean operation on two input meshes.
 
     Parameters
     ----------
     meshes
-        Tuple of two input meshes in array format
+        Tuple of two input meshes
     operation
         Pymeshlab boolean operation name. String names are mapped to pymeshlab functions in ppymeshlab_op_map
 
     Returns
     -------
     booleaned_mesh
-        Result of the boolean operation in array format
+        Result of the boolean operation
 
     """
+    mesh_arrays = [(mesh.points, pyvista_faces_to_2d(mesh.faces)) for mesh in meshes]
 
     ms = pymeshlab.MeshSet()
-    for mesh in meshes:
+    for mesh in mesh_arrays:
         if len(mesh) == 2:
             ml_mesh = pymeshlab.Mesh(mesh[0], mesh[1])
         elif len(mesh) == 3:
@@ -95,8 +93,9 @@ def pymeshlab_boolean(meshes: Tuple[Tuple[np.ndarray, ...], Tuple[np.ndarray, ..
         return None
 
     booleaned_mesh = (ms.mesh(2).vertex_matrix(), ms.mesh(2).face_matrix())
+    pv_booleaned_mesh = pv.PolyData(booleaned_mesh[0], pyvista_faces_to_1d(booleaned_mesh[1]))
 
-    return booleaned_mesh
+    return pv_booleaned_mesh
 
 
 def gmsh_load_from_arrays(mesh_vertices: np.ndarray, mesh_elements: np.ndarray, dim: int = 2, msh_type: int = 2):
@@ -157,17 +156,11 @@ class NotFoundError(Exception):
     pass
 
 
-def gmsh_tetrahedralize(meshes: List[Tuple[np.ndarray, np.ndarray]], gmsh_options: dict) \
-        -> Tuple[np.ndarray, Tuple[np.ndarray, np.ndarray]]:
+def gmsh_tetrahedralize(meshes: List[pv.PolyData], gmsh_options: dict) \
+        -> pv.UnstructuredGrid:
     """
     Run the gmsh tetrahedralization operation (mesh.generate(3)) on a group of surface meshes. Gmsh will interpret the
     outermost mesh as the outer surface, and all other meshes as holes to generte in the tetrahedralization.
-
-    The meshes are described as a platform agnostic Tuple of ndarrays
-    representing mesh vertices and faces. The format is as follows:
-    Tuple element 0: 3xN ndarray of float representing XYZ points in 3D space
-    Tuple element 1: 3xN ndarray of int representing triangular faces composed of indices the points
-
 
     Parameters
     ----------
@@ -178,12 +171,12 @@ def gmsh_tetrahedralize(meshes: List[Tuple[np.ndarray, np.ndarray]], gmsh_option
     Returns
     -------
     nodes, elements
-        Tetrahedralized mesh. Elements are now represented as a Tuple of ndarray. Element 0 is a 3xN array of surface
-        faces. Element 1 is a 4xN array of tetrahedral cells
-
+        Tetrahedralized mesh.
     """
+    mesh_arrays = [(mesh.points, pyvista_faces_to_2d(mesh.faces)) for mesh in meshes]
+
     gmsh.initialize()
-    for mesh in meshes:
+    for mesh in mesh_arrays:
         gmsh_load_from_arrays(mesh[0], mesh[1])
 
     # Create a volume from all the surfaces
@@ -200,11 +193,15 @@ def gmsh_tetrahedralize(meshes: List[Tuple[np.ndarray, np.ndarray]], gmsh_option
 
     nodes, elements = gmsh_tetrahedral_mesh_to_arrays()
     gmsh.finalize()
-    return nodes, elements
+
+    tetrahedralized_mesh = pyvista_tools.pyvista_tetrahedral_mesh_from_arrays(nodes, elements[1])
+
+    return tetrahedralized_mesh
 
 
 def preprocess_and_tetrahedralize(outer_mesh: pv.PolyData, inner_meshes: List[pv.PolyData], mesh_repair_kwargs: dict,
-                                  gmsh_options: dict) -> pv.UnstructuredGrid:
+                                  gmsh_options: dict, outer_mesh_element_label=None, inner_mesh_element_labels:
+        List[str] = None) -> pv.UnstructuredGrid:
     """
     Automatically create a tetrahedralization from multiple input surface meshes. The outer mesh represents the
     outermost boundary of the output mesh, and the inner meshes represent the boundaries of individual inner sections
@@ -217,126 +214,98 @@ def preprocess_and_tetrahedralize(outer_mesh: pv.PolyData, inner_meshes: List[pv
     inner_meshes
         List of Pyvista DataSets representing the surfaces of inner sections
     mesh_repair_kwargs
-        Kwargs for PyMeshfix
+        Kwargs for meshfix.repair
     gmsh_options
-        Kwargs for gmsh
-
+        Dict of values to be passed to gmsh.option.set_number
+    outer_mesh_element_label
+        Optional label for tetrahedral elements within the outer mesh volume
+    inner_mesh_element_labels
+        Optional list of labels for tetrahedral elements within the volumes of the inner meshes
+        
     Returns
     -------
     combined
         Pyvista unstructured grid
 
     """
+    if inner_mesh_element_labels is not None:
+        if len(inner_mesh_element_labels) != len(inner_meshes):
+            raise ValueError("Please enter the same number of mesh element labels as meshes")
+
     print("Fixing...")
     # Fix all inputs
-    fixed_meshes = []
-
-    # blahblahlables = []
-    for mesh in [outer_mesh, *inner_meshes]:
-        if not mesh.is_manifold:
-            fixed_meshes.append(fix_mesh(mesh, mesh_repair_kwargs)[0])
-        else:
-            fixed_meshes.append(mesh)
-
-    fixed_mesh_arrays = [(mesh.points, pyvista_faces_to_2d(mesh.faces)) for mesh in fixed_meshes]
+    fixed_outer_mesh = outer_mesh if outer_mesh.is_manifold else fix_mesh(outer_mesh, mesh_repair_kwargs)
+    fixed_inner_meshes = [mesh if mesh.is_manifold else fix_mesh(mesh, mesh_repair_kwargs) for mesh in inner_meshes]
 
     print("Diffing...")
     # Check all pairs of inner meshes for intersections and create:
     # # List of meshes where intersecting pairs are replaced with a diffed and an original
-    diffed_meshes = dif_any_intersecting(fixed_mesh_arrays[1:])
-    pv_diffed_meshes = [pv.PolyData(mesh[0], pyvista_faces_to_1d(mesh[1])) for mesh in diffed_meshes]
-    for i, mesh in enumerate(inner_meshes):
-        if "Element_name" not in inner_meshes[i].cell_data:
-            continue
-        element_name = inner_meshes[i]["Element_name"][0]
-        sizes = pv_diffed_meshes[i].n_cells
-        pv_diffed_meshes[i]["Element_name"] = np.array([element_name] * sizes)
+    diffed_meshes = dif_any_intersecting(fixed_inner_meshes)
+    fixed_diffed = [mesh if mesh.is_manifold else fix_mesh(mesh, mesh_repair_kwargs) for mesh in diffed_meshes]
 
-    fixed_diffed = [fix_mesh(mesh, mesh_repair_kwargs)[0] if not mesh.is_manifold else mesh for mesh in pv_diffed_meshes]
-    for i, mesh in enumerate(fixed_diffed):
-        if "Element_name" not in pv_diffed_meshes[i].cell_data:
-            continue
-        element_name = pv_diffed_meshes[i]["Element_name"][0]
-        sizes = pv_diffed_meshes[i].n_cells
-        fixed_diffed[i]["Element_name"] = np.array([element_name] * sizes)
-
-
-##lable goes into meshes @fixed_diffed
     print("Combining...")
     # Remove shared faces to form inner hole
     combined = remove_shared_faces(inner_meshes, progress_bar=True)
-    fixed_combined = [fix_mesh(mesh)[0] if not mesh.is_manifold else mesh for mesh in combined]
-    fixed_combined_arrays = [(mesh.points, pyvista_faces_to_2d(mesh.faces)) for mesh in fixed_combined]
+    fixed_combined = [fix_mesh(mesh) if not mesh.is_manifold else mesh for mesh in combined]
 
     print("Unioning...")
     # Check all pairs of inner meshes for intersections and create:
     # # List of meshes where intersecting sets are replaced with a union
-    unioned_meshes = union_any_intersecting(fixed_combined_arrays)
-    pv_unioned_meshes = [pv.PolyData(mesh[0], pyvista_faces_to_1d(mesh[1])) for mesh in unioned_meshes]
-    fixed_unioned = [fix_mesh(mesh, mesh_repair_kwargs)[0] if not mesh.is_manifold else mesh for mesh in pv_unioned_meshes]
+    unioned_meshes = union_any_intersecting(fixed_combined)
+    fixed_unioned = [mesh if mesh.is_manifold else fix_mesh(mesh, mesh_repair_kwargs) for mesh in unioned_meshes]
 
     print("Tetrahedralizing...")
-    fixed_unioned_arrays = [(mesh.points, pyvista_faces_to_2d(mesh.faces)) for mesh in fixed_unioned]
-    # Tetrahedralize outer mesh with hole, then convert to pyvista
-    nodes, elements = gmsh_tetrahedralize([fixed_mesh_arrays[0], *fixed_unioned_arrays], gmsh_options)
-    outer_tetrahedralized = pyvista_tools.pyvista_tetrahedral_mesh_from_arrays(nodes, elements[1])
-    ##add mesh label
-    if "Element_name" in outer_mesh.cell_data:
-        outer_element_name = outer_mesh["Element_name"][0]
-        outer_sizes = outer_tetrahedralized.n_cells
-        outer_tetrahedralized["Element_name"] =np.array([outer_element_name] * outer_sizes)
-
-    # Tetrahedralize each inner mesh, then convert to pyvista
+    # Tetrahedralize outer mesh with hole
+    outer_tetrahedralized = gmsh_tetrahedralize([fixed_outer_mesh, *fixed_unioned], gmsh_options)
+    # Tetrahedralize each inner mesh
     inner_tetrahedralized = []
-    fixed_diffed_arrays = [(mesh.points, pyvista_faces_to_2d(mesh.faces)) for mesh in fixed_diffed]
-
-    for i, mesh in enumerate(fixed_diffed_arrays):
-        nodes, elements = gmsh_tetrahedralize([mesh], gmsh_options)
-        tetrahedralized_mesh = pyvista_tools.pyvista_tetrahedral_mesh_from_arrays(nodes, elements[1])
-
-        if "Element_name" in fixed_diffed[i].cell_data:
-            element_name = fixed_diffed[i]["Element_name"][0]
-            size = tetrahedralized_mesh.n_cells
-            tetrahedralized_mesh["Element_name"] = np.array([element_name] * size)
-
+    for i, mesh in enumerate(fixed_diffed):
+        tetrahedralized_mesh = gmsh_tetrahedralize([mesh], gmsh_options)
         inner_tetrahedralized.append(tetrahedralized_mesh)
+
+    # Label meshes
+    if outer_mesh_element_label is not None:
+        outer_tetrahedralized["Element Label"] = np.array([outer_mesh_element_label] * outer_tetrahedralized.n_cells)
+    else:
+        outer_tetrahedralized["Element Label"] = np.array(["Outer Mesh"] * outer_tetrahedralized.n_cells)
+
+    if inner_mesh_element_labels is not None:
+        for label, mesh in zip(inner_mesh_element_labels, inner_tetrahedralized):
+            mesh["Element Label"] = np.array([label] * mesh.n_cells)
+    else:
+        for i, mesh in enumerate(inner_tetrahedralized):
+            mesh["Element Label"] = np.array([f"Inner Mesh {i}"] * mesh.n_cells)
 
     # Combine result
     out_meshes = [outer_tetrahedralized, *inner_tetrahedralized]
-
-
     for i, mesh in enumerate(out_meshes):
         mesh.cell_data["Scalar"] = np.asarray([i % len(out_meshes)] * mesh.n_cells)
     blocks = pv.MultiBlock(out_meshes)
     out_combined = blocks.combine(merge_points=True)
 
+    # Compute statistics
     cell_sizes = out_combined.compute_cell_sizes()
-
-    outer_surface_volume = fixed_meshes[0].volume
+    outer_surface_volume = fixed_outer_mesh.volume
     total_cell_volume = sum(cell_sizes["Volume"])
     mean_cell_volume = np.mean(cell_sizes["Volume"])
     hole_volume = outer_surface_volume - total_cell_volume
-    hole_volume_percent = (hole_volume/outer_surface_volume)*100
-    hole_volume_in_cells = hole_volume/mean_cell_volume
+    hole_volume_percent = (hole_volume / outer_surface_volume) * 100
+    hole_volume_in_cells = hole_volume / mean_cell_volume
 
     print(f"Hole volume: {hole_volume_percent:.4f}% of outer surface, {hole_volume_in_cells:.4f} x mean cell volume")
-
     qual = out_combined.compute_cell_quality(quality_measure="max_edge_ratio")
 
     return out_combined
 
 
-def union_any_intersecting(meshes: List[Tuple[np.ndarray, np.ndarray]]) -> List[Tuple[np.ndarray, np.ndarray]]:
+def union_any_intersecting(meshes: List[pv.PolyData]) -> List[pv.PolyData]:
     """
     Iterate through a list of surfaces and perform a boolean union on any that are intersecting.
 
     Parameters
     ----------
     meshes
-        Input meshes represented as a Tuple of ndarray.
-            Tuple element 0: 3xN ndarray of float representing XYZ points in 3D space
-            Tuple element 1: 3xN ndarray of int representing triangular faces composed of indices the points
-
+        Input meshes represented as list of pv.PolyData
     Returns
     -------
     unioned_meshes
@@ -349,7 +318,7 @@ def union_any_intersecting(meshes: List[Tuple[np.ndarray, np.ndarray]]) -> List[
     # Iterate through all pairs and create sets of intersecting meshes
     for (index_a, mesh_a), (index_b, mesh_b) in itertools.combinations(enumerate(meshes), 2):
         # If they intersect
-        if pymeshlab_boolean((mesh_a, mesh_b), operation="Intersection") is not None:
+        if pymeshlab_boolean([mesh_a, mesh_b], operation="Intersection") is not None:
             # If a is already part of a set, add b to it
             if np.any([index_a in s for s in intersection_sets]):
                 intersection_sets[np.argmax([index_a in s for s in intersection_sets])].add(index_b)
@@ -364,9 +333,9 @@ def union_any_intersecting(meshes: List[Tuple[np.ndarray, np.ndarray]]) -> List[
     unioned_meshes = []
     for intersection_set in intersection_sets:
         set_list = list(intersection_set)
-        union_result = pymeshlab_boolean((meshes[set_list[0]], meshes[set_list[1]]), operation="Union")
+        union_result = pymeshlab_boolean([meshes[set_list[0]], meshes[set_list[1]]], operation="Union")
         for index in set_list[2:]:
-            union_result = pymeshlab_boolean((union_result, meshes[index]), operation="Union")
+            union_result = pymeshlab_boolean([union_result, meshes[index]], operation="Union")
         unioned_meshes.append(union_result)
 
     # Put back in any that weren't unioned
@@ -378,7 +347,7 @@ def union_any_intersecting(meshes: List[Tuple[np.ndarray, np.ndarray]]) -> List[
     return unioned_meshes
 
 
-def dif_any_intersecting(meshes: List[Tuple[np.ndarray, np.ndarray]]) -> List[Tuple[np.ndarray, np.ndarray]]:
+def dif_any_intersecting(meshes: List[pv.PolyData]) -> List[pv.PolyData]:
     """
     Iterate through a list of input surfaces and perform a boolean difference on any that are intersercting.
 
@@ -388,9 +357,7 @@ def dif_any_intersecting(meshes: List[Tuple[np.ndarray, np.ndarray]]) -> List[Tu
     Parameters
     ----------
     meshes
-        Input meshes represented as a Tuple of ndarray.
-            Tuple element 0: 3xN ndarray of float representing XYZ points in 3D space
-            Tuple element 1: 3xN ndarray of int representing triangular faces composed of indices the points
+        Input meshes represented as list of pv.PolyData
 
     Returns
     -------
@@ -406,7 +373,7 @@ def dif_any_intersecting(meshes: List[Tuple[np.ndarray, np.ndarray]]) -> List[Tu
     index_b: object
     for (index_a, mesh_a), (index_b, mesh_b) in itertools.combinations(enumerate(meshes), 2):
         # If they intersect
-        if pymeshlab_boolean((mesh_a, mesh_b), operation="Intersection") is not None:
+        if pymeshlab_boolean([mesh_a, mesh_b], operation="Intersection") is not None:
             # If we've already seen a, add b dif a to dif pairs
             if index_a in intersection_list:
                 intersection_list.append(index_b)
@@ -423,7 +390,7 @@ def dif_any_intersecting(meshes: List[Tuple[np.ndarray, np.ndarray]]) -> List[Tu
     # Diff all the pairs
     diffed_meshes = []
     for pair in dif_pairs:
-        diffed_mesh = pymeshlab_boolean((meshes[pair[0]], meshes[pair[1]]), operation="Difference")
+        diffed_mesh = pymeshlab_boolean([meshes[pair[0]], meshes[pair[1]]], operation="Difference")
         if diffed_mesh is None:
             raise ValueError("Difference operation returned None. Ensure meshes do not overlap completely")
         diffed_meshes.append(diffed_mesh)
@@ -433,17 +400,5 @@ def dif_any_intersecting(meshes: List[Tuple[np.ndarray, np.ndarray]]) -> List[Tu
     for index, mesh in enumerate(meshes):
         if index not in diffed_indices:
             diffed_meshes.append(mesh)
-
-    return diffed_meshes
-
-
-def label_any_mesh(meshes, label):
-    """take in a mesh and a label
-    output the mesh with a label for vtk
-    """
-    scalar3_array = numpy_support.numpy_to_vtk(scalar3)
-    scalar3_array.SetName('scalar3')
-    cell_data.AddArray(scalar3)
-
 
     return diffed_meshes
