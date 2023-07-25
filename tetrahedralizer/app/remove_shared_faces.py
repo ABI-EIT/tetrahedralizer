@@ -8,7 +8,7 @@ from tkinter.filedialog import askopenfilenames
 from matplotlib import cm
 
 from pyvista_tools import remove_shared_faces, pyvista_faces_to_2d, pyvista_faces_to_1d, \
-    select_faces_using_points, remove_shared_faces_with_ray_trace
+    select_faces_using_points, remove_shared_faces_with_ray_trace, remove_shared_faces_with_merge
 
 """
 App to combine meshes by removing their shared walls. Designed to be used with surface meshes representing the lobes of
@@ -43,12 +43,22 @@ def main():
     #                                        incidence_angle_tolerance=incidence_angle_tolerance,
     #                                        return_removed_faces=True)
 
-    trimmed_meshes, removed_faces = \
-        remove_shared_faces(meshes, return_removed_faces=True)
+    # trimmed_meshes, removed_faces = \
+    #     remove_shared_faces(meshes, return_removed_faces=True)
+    # combined = pv.PolyData()
+    # for mesh in trimmed_meshes:
+    #     combined = combined.merge(mesh)
 
-    combined = pv.PolyData()
-    for mesh in trimmed_meshes:
-        combined = combined.merge(mesh)
+    trimmed_meshes, removed_faces = \
+        remove_shared_faces_with_merge(meshes, return_removed_faces=True)
+    combined = trimmed_meshes
+
+    merged = meshes[0]
+    for i, mesh in enumerate(meshes[1:]):
+        merged = merged.merge(mesh)
+
+
+
 
     # Save result
     if not os.path.exists(output_directory):
@@ -73,11 +83,14 @@ def main():
     p.add_title("Input Meshes")
     p.show()
 
-    # Create polydata of removed faces
-    shared_faces_meshes = []
-    for mesh, faces in zip(meshes, removed_faces):
-        shared_faces = pyvista_faces_to_1d(pyvista_faces_to_2d(mesh.faces)[faces])
-        shared_faces_meshes.append(pv.PolyData(mesh.points, faces=shared_faces))
+    # # Create polydata of removed faces
+    # shared_faces_meshes = []
+    # for mesh, faces in zip(meshes, removed_faces):
+    #     shared_faces = pyvista_faces_to_1d(pyvista_faces_to_2d(mesh.faces)[faces])
+    #     shared_faces_meshes.append(pv.PolyData(mesh.points, faces=shared_faces))
+
+    shared_faces = pv.PolyData(merged.points, faces=pyvista_faces_to_1d(pyvista_faces_to_2d(merged.faces)[removed_faces]))
+    shared_faces_meshes = [shared_faces]
 
     # Plot removed faces
     p = pv.Plotter()

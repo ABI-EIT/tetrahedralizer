@@ -3,7 +3,7 @@ from tkinter.filedialog import askopenfilename, askopenfilenames
 import json
 import pyvista as pv
 from tetrahedralizer.mesh_lib import preprocess_and_tetrahedralize
-from matplotlib import cm
+from matplotlib import colormaps
 import os
 import pathlib
 
@@ -60,7 +60,7 @@ def main():
 
     # Plot result
     p = pv.Plotter()
-    cmap = cm.get_cmap("Accent")
+    cmap = colormaps["Accent"]
     p.add_mesh(combined, opacity=0.15, cmap=cmap, show_edges=True, edge_color="gray")
 
     def plane_func(normal, origin):

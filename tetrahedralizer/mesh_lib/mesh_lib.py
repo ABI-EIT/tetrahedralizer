@@ -9,7 +9,7 @@ import pymeshlab
 import pyvista as pv
 import pyvista_tools
 from pyvista_tools import pyvista_faces_to_2d, pyvista_faces_to_1d, remove_shared_faces_with_ray_trace, \
-    remove_shared_faces
+    remove_shared_faces, remove_shared_faces_with_merge
 
 
 def fix_mesh(mesh: pv.DataSet, repair_kwargs: Dict = None, return_holes=False) -> Union[
@@ -201,7 +201,7 @@ def gmsh_tetrahedralize(meshes: List[pv.PolyData], gmsh_options: dict) \
 
 def preprocess_and_tetrahedralize(outer_mesh: pv.PolyData, inner_meshes: List[pv.PolyData], mesh_repair_kwargs: dict,
                                   gmsh_options: dict, outer_mesh_element_label=None, inner_mesh_element_labels:
-        List[str] = None) -> pv.UnstructuredGrid:
+        List[str] = None, return_quality=False) -> Union[pv.UnstructuredGrid, Tuple[pv.UnstructuredGrid, pv.DataSet]]:
     """
     Automatically create a tetrahedralization from multiple input surface meshes. The outer mesh represents the
     outermost boundary of the output mesh, and the inner meshes represent the boundaries of individual inner sections
@@ -243,25 +243,23 @@ def preprocess_and_tetrahedralize(outer_mesh: pv.PolyData, inner_meshes: List[pv
     diffed_meshes = dif_any_intersecting(fixed_inner_meshes)
     fixed_diffed = [mesh if mesh.is_manifold else fix_mesh(mesh, mesh_repair_kwargs) for mesh in diffed_meshes]
 
-    print("Combining...")
-    # Remove shared faces to form inner hole
-    combined = remove_shared_faces(inner_meshes, progress_bar=True)
-    fixed_combined = [fix_mesh(mesh) if not mesh.is_manifold else mesh for mesh in combined]
-
     print("Unioning...")
     # Check all pairs of inner meshes for intersections and create:
     # # List of meshes where intersecting sets are replaced with a union
-    unioned_meshes = union_any_intersecting(fixed_combined)
+    unioned_meshes = union_any_intersecting(fixed_inner_meshes)
     fixed_unioned = [mesh if mesh.is_manifold else fix_mesh(mesh, mesh_repair_kwargs) for mesh in unioned_meshes]
+
+    print("Combining...")
+    # Remove shared faces to form inner hole
+    # combined = remove_shared_faces(inner_meshes, progress_bar=True)
+    combined = remove_shared_faces_with_merge(fixed_unioned)
+    fixed_combined = [fix_mesh(mesh) if not mesh.is_manifold else mesh for mesh in [combined]]
 
     print("Tetrahedralizing...")
     # Tetrahedralize outer mesh with hole
-    outer_tetrahedralized = gmsh_tetrahedralize([fixed_outer_mesh, *fixed_unioned], gmsh_options)
+    outer_tetrahedralized = gmsh_tetrahedralize([fixed_outer_mesh, *fixed_combined], gmsh_options)
     # Tetrahedralize each inner mesh
-    inner_tetrahedralized = []
-    for i, mesh in enumerate(fixed_diffed):
-        tetrahedralized_mesh = gmsh_tetrahedralize([mesh], gmsh_options)
-        inner_tetrahedralized.append(tetrahedralized_mesh)
+    inner_tetrahedralized = [gmsh_tetrahedralize([mesh], gmsh_options) for mesh in fixed_diffed]
 
     # Label meshes
     if outer_mesh_element_label is not None:
@@ -293,8 +291,10 @@ def preprocess_and_tetrahedralize(outer_mesh: pv.PolyData, inner_meshes: List[pv
     hole_volume_in_cells = hole_volume / mean_cell_volume
 
     print(f"Hole volume: {hole_volume_percent:.4f}% of outer surface, {hole_volume_in_cells:.4f} x mean cell volume")
-    qual = out_combined.compute_cell_quality(quality_measure="max_edge_ratio")
+    qual = out_combined.compute_cell_quality(quality_measure="aspect_ratio")
 
+    if return_quality:
+        return out_combined, qual
     return out_combined
 
 
