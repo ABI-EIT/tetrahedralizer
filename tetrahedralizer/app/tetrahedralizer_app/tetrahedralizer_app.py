@@ -34,8 +34,8 @@ def main():
 
     Tk().withdraw()
     filenames = askopenfilenames(title="Select inner meshes")
-    if len(filenames) == 0:
-        return
+    # if len(filenames) == 0:
+    #     return
     Tk().destroy()
 
     # Load files
