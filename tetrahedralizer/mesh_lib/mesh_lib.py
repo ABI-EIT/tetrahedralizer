@@ -176,23 +176,25 @@ def gmsh_tetrahedralize(meshes: List[pv.PolyData], gmsh_options: dict) \
     mesh_arrays = [(mesh.points, pyvista_faces_to_2d(mesh.faces)) for mesh in meshes]
 
     gmsh.initialize()
-    for mesh in mesh_arrays:
-        gmsh_load_from_arrays(mesh[0], mesh[1])
+    try:
+        for mesh in mesh_arrays:
+            gmsh_load_from_arrays(mesh[0], mesh[1])
 
-    # Create a volume from all the surfaces
-    s = gmsh.model.get_entities(2)
-    l = gmsh.model.geo.addSurfaceLoop([e[1] for e in s])
-    gmsh.model.geo.addVolume([l])
+        # Create a volume from all the surfaces
+        s = gmsh.model.get_entities(2)
+        l = gmsh.model.geo.addSurfaceLoop([e[1] for e in s])
+        gmsh.model.geo.addVolume([l])
 
-    gmsh.model.geo.synchronize()
+        gmsh.model.geo.synchronize()
 
-    for name, value in gmsh_options.items():
-        gmsh.option.set_number(name, value)
+        for name, value in gmsh_options.items():
+            gmsh.option.set_number(name, value)
 
-    gmsh.model.mesh.generate(3)
+        gmsh.model.mesh.generate(3)
 
-    nodes, elements = gmsh_tetrahedral_mesh_to_arrays()
-    gmsh.finalize()
+        nodes, elements = gmsh_tetrahedral_mesh_to_arrays()
+    finally:
+        gmsh.finalize()
 
     tetrahedralized_mesh = pyvista_tools.pyvista_tetrahedral_mesh_from_arrays(nodes, elements[1])
 
@@ -253,7 +255,8 @@ def preprocess_and_tetrahedralize(outer_mesh: pv.PolyData, inner_meshes: List[pv
     # Remove shared faces to form inner hole
     # combined = remove_shared_faces(inner_meshes, progress_bar=True)
     combined = remove_shared_faces_with_merge(fixed_unioned) if len(fixed_unioned) > 0 else None
-    fixed_combined = [fix_mesh(mesh) if not mesh.is_manifold else mesh for mesh in [combined]] if combined is not None else []
+    fixed_combined = [fix_mesh(mesh) if not mesh.is_manifold else mesh for mesh in
+                      [combined]] if combined is not None else []
 
     print("Tetrahedralizing...")
     # Tetrahedralize outer mesh with hole
